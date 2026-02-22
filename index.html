@@ -33,16 +33,21 @@
       Connexion avec Google
     </button>
     <div id="login-error" class="login-error"></div>
-    <div style="margin-top:1.5rem">
-      <button onclick="showAdminLogin()" style="background:none;border:none;color:var(--text2);font-size:.75rem;cursor:pointer;opacity:.35;letter-spacing:.05em;">⚙ Admin</button>
+
+    <!-- BOUTON ADMIN -->
+    <div class="admin-toggle-wrap">
+      <button class="admin-toggle-btn" onclick="showAdminLogin()">🔐 Accès Administrateur</button>
     </div>
-    <div id="admin-login-box" style="display:none;margin-top:1rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1rem;text-align:left;">
-      <div style="font-size:.8rem;color:var(--text2);margin-bottom:.5rem;letter-spacing:.05em;">CONNEXION ADMINISTRATEUR</div>
-      <input id="admin-id-input" class="bet-input" placeholder="Identifiant" style="width:100%;margin-bottom:.5rem;"/>
-      <input id="admin-pw-input" class="bet-input" type="password" placeholder="Mot de passe" style="width:100%;margin-bottom:.75rem;"/>
-      <button onclick="tryAdminLogin()" class="btn-play" style="padding:.6rem;font-size:.9rem;">Connexion</button>
-      <div id="admin-login-error" style="color:var(--red2);font-size:.8rem;margin-top:.5rem;"></div>
+
+    <!-- FORMULAIRE ADMIN -->
+    <div id="admin-login-box" class="admin-login-box" style="display:none;">
+      <div class="admin-login-title">CONNEXION ADMINISTRATEUR</div>
+      <input id="admin-id-input" class="bet-input admin-input" placeholder="Identifiant" autocomplete="off"/>
+      <input id="admin-pw-input" class="bet-input admin-input" type="password" placeholder="Mot de passe"/>
+      <button class="btn-play" onclick="tryAdminLogin()" style="padding:.7rem;font-size:.95rem;">Connexion</button>
+      <div id="admin-login-error" class="admin-login-error"></div>
     </div>
+
   </div>
 </div>
 
@@ -261,7 +266,7 @@
       <button class="btn-admin-remove" onclick="adminRemove()">➖ Retirer</button>
     </div>
     <div class="admin-modal-btns">
-      <button class="btn-admin-ban" onclick="adminBan()">🚫 Bannir</button>
+      <button class="btn-admin-ban" onclick="adminBan()">🚫 Bannir / Débannir</button>
       <button class="btn-admin-delete" onclick="adminDelete()">🗑️ Supprimer</button>
     </div>
     <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
