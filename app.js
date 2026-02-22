@@ -28,6 +28,7 @@ function showPage(name) {
 }
 window.goToGame = function(game) {
   if (game === "leaderboard") renderLeaderboard();
+  if (game === "roulette") initRouletteStrip();
   showPage(game);
 };
 window.goToLobby = function() { showPage("lobby"); };
@@ -56,7 +57,6 @@ onAuthStateChanged(auth, async (user) => {
     document.getElementById("user-avatar").src = user.photoURL || "";
     document.getElementById("lobby-username").textContent = user.displayName || "";
     startLeaderboard();
-    buildStrip();
     showPage("lobby");
   } else {
     currentUser = null; userData = null;
@@ -87,7 +87,6 @@ window.quickBet = (id, mult) => {
   el.value = Math.max(10, Math.round(Number(el.value) * mult));
 };
 window.setMax = (id) => { document.getElementById(id).value = userData?.balance ?? 0; };
-
 function parseBet(id) {
   const val = Number(document.getElementById(id).value);
   if (!Number.isFinite(val) || val < 10) { toast("Mise minimum : 10 VLX", "lose"); return null; }
@@ -96,42 +95,95 @@ function parseBet(id) {
 }
 
 // ════════════════════════════════════════════════════════════
-//   ROULETTE — BANDE DÉFILANTE
+//   ROULETTE — CANVAS INFINI
 // ════════════════════════════════════════════════════════════
 
-// Segments avec leurs propriétés
-const SEGMENTS = [
-  { mult:0,   label:"×0",   cls:"c0"  },
-  { mult:0.5, label:"×0.5", cls:"c05" },
-  { mult:1,   label:"×1",   cls:"c1"  },
-  { mult:2,   label:"×2",   cls:"c2"  },
-  { mult:5,   label:"×5",   cls:"c5"  },
+const SEGS = [
+  { mult:0,   label:"×0",   color:"#7a0000", text:"#ff6b6b" },
+  { mult:0.5, label:"×0.5", color:"#0d3566", text:"#74b9ff" },
+  { mult:1,   label:"×1",   color:"#2d2d2d", text:"#dfe6e9" },
+  { mult:2,   label:"×2",   color:"#1a5c1a", text:"#55efc4" },
+  { mult:5,   label:"×5",   color:"#7a4400", text:"#fdcb6e" },
 ];
 
-const CELL_W        = 90;   // largeur d'une case en px
-const STRIP_COPIES  = 8;    // répétitions pour la bande infinie
-let stripOffset     = 0;    // position actuelle (px, négative)
-let rouletteSpinning = false;
+const CELL_W = 100;  // largeur case px
+const CELL_H = 100;  // hauteur case px
 
-// Construit la bande avec STRIP_COPIES répétitions du pattern
-function buildStrip() {
-  const strip = document.getElementById("roulette-strip");
-  strip.innerHTML = "";
-  for (let r = 0; r < STRIP_COPIES; r++) {
-    SEGMENTS.forEach(seg => {
-      const cell = document.createElement("div");
-      cell.className = "strip-cell " + seg.cls;
-      cell.innerHTML = `<span class="cell-mult">${seg.label}</span>`;
-      strip.appendChild(cell);
-    });
-  }
-  // Position initiale : centrer sur le milieu de la bande
-  const totalCells = SEGMENTS.length * STRIP_COPIES;
-  const viewportCenter = document.querySelector(".strip-viewport").offsetWidth / 2;
-  // On démarre au centre de la bande
-  stripOffset = -(Math.floor(totalCells / 2) * CELL_W - viewportCenter + CELL_W / 2);
-  strip.style.transform = `translateX(${stripOffset}px)`;
+let canvas, ctx;
+let rouletteSpinning = false;
+let animOffset = 0;   // position actuelle (px, défile vers gauche)
+let animId     = null;
+
+function initRouletteStrip() {
+  canvas = document.getElementById("roulette-canvas");
+  if (!canvas) return;
+  ctx = canvas.getContext("2d");
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = CELL_H;
+  drawStrip(animOffset);
 }
+
+// Dessine la bande à une position donnée
+function drawStrip(offset) {
+  if (!canvas || !ctx) return;
+  const W = canvas.width;
+  const H = canvas.height;
+  const patternW = SEGS.length * CELL_W;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Calcul du décalage normalisé (modulo pour boucler)
+  const norm = ((offset % patternW) + patternW) % patternW;
+
+  // On dessine assez de cases pour couvrir tout le canvas + débords
+  const startCell = Math.floor(norm / CELL_W);
+  const startX    = -(norm % CELL_W);
+
+  for (let i = -1; i < Math.ceil(W / CELL_W) + 2; i++) {
+    const segIdx = ((startCell + i) % SEGS.length + SEGS.length) % SEGS.length;
+    const seg    = SEGS[segIdx];
+    const x      = startX + i * CELL_W;
+
+    // Fond
+    ctx.fillStyle = seg.color;
+    ctx.fillRect(x, 0, CELL_W, H);
+
+    // Séparateur
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, 0, CELL_W, H);
+
+    // Multiplicateur
+    ctx.fillStyle = seg.text;
+    ctx.font      = "bold 24px 'DM Mono', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(seg.label, x + CELL_W / 2, H / 2);
+  }
+
+  // Dégradés sur les côtés
+  const fadeW = 100;
+  const gradL = ctx.createLinearGradient(0, 0, fadeW, 0);
+  gradL.addColorStop(0, "#0a0a0f");
+  gradL.addColorStop(1, "transparent");
+  ctx.fillStyle = gradL;
+  ctx.fillRect(0, 0, fadeW, H);
+
+  const gradR = ctx.createLinearGradient(W - fadeW, 0, W, 0);
+  gradR.addColorStop(0, "transparent");
+  gradR.addColorStop(1, "#0a0a0f");
+  ctx.fillStyle = gradR;
+  ctx.fillRect(W - fadeW, 0, fadeW, H);
+
+  // Surlignage central (case active)
+  const cx = W / 2;
+  ctx.strokeStyle = "rgba(212, 160, 23, 0.8)";
+  ctx.lineWidth   = 3;
+  ctx.strokeRect(cx - CELL_W / 2, 2, CELL_W, H - 4);
+}
+
+// Easing ease-out cubique
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
 
 window.spinRoulette = async function() {
   if (rouletteSpinning) return;
@@ -142,38 +194,58 @@ window.spinRoulette = async function() {
   document.getElementById("roulette-spin-btn").disabled = true;
   document.getElementById("roulette-result").textContent = "";
 
-  // Tirage aléatoire du segment gagnant
-  const winIdx = Math.floor(Math.random() * SEGMENTS.length);
-  const winner = SEGMENTS[winIdx];
+  // Tirage
+  const winIdx = Math.floor(Math.random() * SEGS.length);
+  const winner = SEGS[winIdx];
 
-  const strip      = document.getElementById("roulette-strip");
-  const viewport   = document.querySelector(".strip-viewport");
-  const vpCenter   = viewport.offsetWidth / 2;
-  const totalWidth = SEGMENTS.length * CELL_W * STRIP_COPIES;
+  // On veut que la case gagnante soit exactement au centre du canvas
+  // Centre = canvas.width / 2
+  // On calcule la distance à parcourir :
+  //  - tours complets : 5 à 8 fois le pattern
+  //  - + position de la case gagnante centrée
+  const W          = canvas.width;
+  const patternW   = SEGS.length * CELL_W;
+  const extraTurns = (5 + Math.floor(Math.random() * 4)) * patternW;
 
-  // On tire 4 à 7 tours complets + position cible
-  const extraRolls     = (4 + Math.floor(Math.random() * 4)) * SEGMENTS.length * CELL_W;
-  // Centre de la case gagnante dans la copie du milieu
-  const targetCopyStart = Math.floor(STRIP_COPIES / 2) * SEGMENTS.length * CELL_W;
-  const targetCellCenter = targetCopyStart + winIdx * CELL_W + CELL_W / 2;
-  // Décalage final pour centrer la case gagnante dans le viewport
-  const finalOffset = -(targetCellCenter - vpCenter + extraRolls);
+  // Position du centre de la case gagnante dans le pattern
+  const winCellCenter = winIdx * CELL_W + CELL_W / 2;
+  // On veut que winCellCenter soit sous W/2 (le pointeur central)
+  // offset final = winCellCenter - W/2 + extraTurns
+  const targetOffset = animOffset + extraTurns + (winCellCenter - (animOffset % patternW + patternW) % patternW);
 
-  // Animation CSS
-  strip.style.transition = "transform 3.5s cubic-bezier(0.12, 0.8, 0.3, 1)";
-  strip.style.transform  = `translateX(${finalOffset}px)`;
-  stripOffset = finalOffset;
+  const startOffset = animOffset;
+  const totalDist   = targetOffset - startOffset;
+  const duration    = 3500; // ms
+  const startTime   = performance.now();
 
-  await delay(3700);
+  if (animId) cancelAnimationFrame(animId);
 
-  // Légère vibration d'arrêt
-  strip.style.transition = "transform 0.15s ease";
-  strip.style.transform  = `translateX(${finalOffset + 3}px)`;
-  await delay(80);
-  strip.style.transform  = `translateX(${finalOffset}px)`;
-  await delay(150);
+  function animate(now) {
+    const elapsed  = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased    = easeOut(progress);
 
-  // Résultat
+    animOffset = startOffset + totalDist * eased;
+    drawStrip(animOffset);
+
+    if (progress < 1) {
+      animId = requestAnimationFrame(animate);
+    } else {
+      animOffset = targetOffset;
+      drawStrip(animOffset);
+      finishSpin(winner, bet);
+    }
+  }
+
+  animId = requestAnimationFrame(animate);
+};
+
+async function finishSpin(winner, bet) {
+  // Petit rebond
+  const bounce = animOffset - 5;
+  await animateTo(bounce, 100);
+  await animateTo(animOffset + 5, 150);
+
   const gain = Math.round(bet * winner.mult) - bet;
   userData.balance = Math.max(0, userData.balance + gain);
   userData.gamesPlayed++;
@@ -181,8 +253,8 @@ window.spinRoulette = async function() {
 
   const resultEl = document.getElementById("roulette-result");
   if (winner.mult === 0) {
-    resultEl.innerHTML = `<span style="color:var(--red2)">×0 — Perdu ${bet} VLX</span>`;
-    toast(`Perdu ${bet} VLX 💀`, "lose");
+    resultEl.innerHTML = `<span style="color:var(--red2)">×0 — Perdu ${bet} VLX 💀</span>`;
+    toast(`Perdu ${bet} VLX`, "lose");
   } else if (winner.mult < 1) {
     resultEl.innerHTML = `<span style="color:var(--gold)">×0.5 → +${Math.round(bet*0.5)} VLX</span>`;
     toast(`×0.5 → +${Math.round(bet*0.5)} VLX`, "");
@@ -190,13 +262,34 @@ window.spinRoulette = async function() {
     resultEl.innerHTML = `<span style="color:var(--text)">×1 — Mise remboursée</span>`;
     toast("Mise remboursée !", "");
   } else {
-    resultEl.innerHTML = `<span style="color:var(--green2)">×${winner.mult} — GAGNÉ ! +${Math.round(bet*winner.mult)} VLX 🎉</span>`;
+    resultEl.innerHTML = `<span style="color:var(--green2)">×${winner.mult} — GAGNÉ +${Math.round(bet*winner.mult)} VLX 🎉</span>`;
     toast(`×${winner.mult} ! +${Math.round(bet*winner.mult)} VLX 🎉`, "win");
   }
 
   rouletteSpinning = false;
   document.getElementById("roulette-spin-btn").disabled = false;
-};
+}
+
+function animateTo(target, duration) {
+  return new Promise(resolve => {
+    const start     = animOffset;
+    const dist      = target - start;
+    const startTime = performance.now();
+    function step(now) {
+      const t = Math.min((now - startTime) / duration, 1);
+      animOffset = start + dist * t;
+      drawStrip(animOffset);
+      if (t < 1) requestAnimationFrame(step);
+      else resolve();
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// Redimensionnement
+window.addEventListener("resize", () => {
+  if (currentPage === "roulette") initRouletteStrip();
+});
 
 // ════════════════════════════════════════════════════════════
 //   MINES
