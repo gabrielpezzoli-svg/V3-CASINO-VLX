@@ -24,6 +24,21 @@
       Connexion avec Google
     </button>
     <div id="login-error" class="login-error"></div>
+
+    <!-- Bouton admin discret -->
+    <div style="margin-top:1.5rem">
+      <button onclick="showAdminLogin()" style="background:none;border:none;color:var(--text2);font-size:.75rem;cursor:pointer;opacity:.4;">⚙ Admin</button>
+    </div>
+
+    <!-- Formulaire login admin -->
+    <div id="admin-login-box" style="display:none;margin-top:1rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:1rem;text-align:left;">
+      <div style="font-size:.8rem;color:var(--text2);margin-bottom:.5rem;">Connexion administrateur</div>
+      <input id="admin-id-input" class="bet-input" placeholder="Identifiant" style="width:100%;margin-bottom:.5rem;"/>
+      <input id="admin-pw-input" class="bet-input" type="password" placeholder="Mot de passe" style="width:100%;margin-bottom:.5rem;"/>
+      <button onclick="tryAdminLogin()" class="btn-play" style="padding:.6rem;font-size:.9rem;">Connexion</button>
+      <div id="admin-login-error" style="color:var(--red2);font-size:.8rem;margin-top:.5rem;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -86,8 +101,6 @@
     <div id="dice-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content">
-
-    <!-- BARRE VISUELLE -->
     <div class="dice-bar-wrap">
       <div class="dice-bar-track">
         <div id="dice-bar-win" class="dice-bar-win"></div>
@@ -97,17 +110,11 @@
         <span>1</span><span>25</span><span>50</span><span>75</span><span>100</span>
       </div>
     </div>
-
-    <!-- RÉSULTAT -->
     <div class="dice-result-row">
       <div id="dice-rolled" class="dice-rolled">—</div>
       <div class="dice-vs">résultat</div>
     </div>
-
-    <!-- CONTROLES -->
     <div class="dice-controls">
-
-      <!-- Seuil -->
       <div class="dice-ctrl-group">
         <label class="bet-label">Seuil cible</label>
         <div class="dice-number-row">
@@ -118,8 +125,6 @@
           <button class="dice-adj-btn" onclick="adjustTarget(5)">+5</button>
         </div>
       </div>
-
-      <!-- Direction -->
       <div class="dice-ctrl-group">
         <label class="bet-label">Direction</label>
         <div class="dice-dir-btns">
@@ -127,16 +132,11 @@
           <button id="dir-over"  class="dir-btn"        onclick="setDirection('over')">⬆ SUR</button>
         </div>
       </div>
-
-      <!-- Multiplicateur affiché -->
       <div class="dice-ctrl-group">
         <label class="bet-label">Multiplicateur</label>
         <div id="dice-mult-display" class="dice-mult-display">×2.00</div>
       </div>
-
     </div>
-
-    <!-- MISE -->
     <div class="bet-panel">
       <label class="bet-label">Mise (VLX)</label>
       <div class="bet-row">
@@ -149,7 +149,6 @@
       </div>
       <button id="dice-roll-btn" class="btn-play" onclick="rollDice()">🎲 LANCER</button>
     </div>
-
   </div>
 </div>
 
@@ -227,6 +226,41 @@
     <div id="leaderboard-list" class="leaderboard-list">
       <div class="lb-loading">Chargement...</div>
     </div>
+  </div>
+</div>
+
+<!-- PAGE 7 : ADMIN -->
+<div id="page-admin" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="showPage('login')">← Déconnexion Admin</button>
+    <div class="game-topbar-title">🔐 Panneau Admin</div>
+    <div></div>
+  </div>
+  <div class="game-content">
+    <div id="admin-list" class="admin-list">
+      <div class="lb-loading">Chargement des joueurs...</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ADMIN -->
+<div id="admin-modal" class="admin-modal-overlay" style="display:none">
+  <div class="admin-modal">
+    <div class="admin-modal-title">⚙️ Gérer le compte</div>
+    <div id="admin-modal-username" class="admin-modal-user"></div>
+    <div id="admin-modal-balance" class="admin-modal-bal"></div>
+    <div class="admin-modal-row">
+      <input type="number" id="admin-amount" class="bet-input" placeholder="Montant VLX" min="1" style="width:100%"/>
+    </div>
+    <div class="admin-modal-btns">
+      <button class="btn-admin-add" onclick="adminAdd()">➕ Ajouter</button>
+      <button class="btn-admin-remove" onclick="adminRemove()">➖ Retirer</button>
+    </div>
+    <div class="admin-modal-btns">
+      <button class="btn-admin-ban" onclick="adminBan()">🚫 Bannir</button>
+      <button class="btn-admin-delete" onclick="adminDelete()">🗑️ Supprimer</button>
+    </div>
+    <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
   </div>
 </div>
 
