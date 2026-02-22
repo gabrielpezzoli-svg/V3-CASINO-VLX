@@ -1,282 +1,478 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Casino VLX</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@400;500&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css"/>
-</head>
-<body>
+import {
+  auth, db, googleProvider,
+  signInWithPopup, signOut, onAuthStateChanged,
+  doc, getDoc, setDoc, updateDoc,
+  collection, query, orderBy, limit, onSnapshot
+} from "./firebase-config.js";
 
-<!-- PAGE 1 : LOGIN -->
-<div id="page-login" class="page active">
-  <div class="login-bg">
-    <div class="bg-glow"></div>
-    <div class="bg-glow glow2"></div>
-    <div class="card-suits">♠ ♥ ♦ ♣</div>
-  </div>
-  <div class="login-box">
-    <div class="logo">
-      <span class="logo-v">V</span><span class="logo-lx">LX</span>
-      <div class="logo-sub">CASINO</div>
-    </div>
-    <p class="login-desc">Commencez avec <strong>1 500 VLX</strong>.<br>Montez au sommet du classement.</p>
-    <button id="google-login-btn" class="btn-google">
-      <svg width="20" height="20" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.7-6.7C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.6 2.6 13.7l7.8 6C12.4 13.3 17.8 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/>
-        <path fill="#FBBC05" d="M10.4 28.3A14.6 14.6 0 0 1 9.5 24c0-1.5.3-3 .9-4.3l-7.8-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.4z"/>
-        <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.3-7.7 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.8 6A23.9 23.9 0 0 0 24 48z"/>
-      </svg>
-      Connexion avec Google
-    </button>
-    <div id="login-error" class="login-error"></div>
-  </div>
-</div>
+import { getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-<!-- PAGE 2 : LOBBY -->
-<div id="page-lobby" class="page">
-  <div class="lobby-header">
-    <div class="lobby-logo">VLX <span>CASINO</span></div>
-    <div class="lobby-user-area">
-      <img id="user-avatar" src="" alt="avatar" class="avatar"/>
-      <button id="logout-btn" class="btn-logout">Déconnexion</button>
-    </div>
-  </div>
-  <div class="lobby-body">
-    <div class="lobby-balance-card">
-      <div class="lbc-label">Votre solde</div>
-      <div id="balance-display" class="lbc-amount">0 VLX</div>
-      <div id="lobby-username" class="lbc-name"></div>
-    </div>
-    <div class="lobby-games-grid">
-      <div class="game-card" onclick="goToGame('dice')">
-        <div class="gc-icon">🎲</div>
-        <div class="gc-name">Dice</div>
-        <div class="gc-desc">Choisis un seuil · Plus c'est risqué, plus tu gagnes</div>
-        <div class="gc-play">JOUER →</div>
-      </div>
-      <div class="game-card" onclick="goToGame('mines')">
-        <div class="gc-icon">💣</div>
-        <div class="gc-name">Mines</div>
-        <div class="gc-desc">Grille 5×5 · 5 mines · Cashout libre</div>
-        <div class="gc-play">JOUER →</div>
-      </div>
-      <div class="game-card" onclick="goToGame('coinflip')">
-        <div class="gc-icon">🪙</div>
-        <div class="gc-name">Pile ou Face</div>
-        <div class="gc-desc">Bleu ou Rouge · Gain ×2</div>
-        <div class="gc-play">JOUER →</div>
-      </div>
-      <div class="game-card leaderboard-card" onclick="goToGame('leaderboard')">
-        <div class="gc-icon">🏆</div>
-        <div class="gc-name">Classement</div>
-        <div class="gc-desc">Top joueurs en temps réel</div>
-        <div class="gc-play">VOIR →</div>
-      </div>
-      <div class="game-card bonus-card" id="bonus-card" onclick="claimBonus()">
-        <div class="gc-icon">🎁</div>
-        <div class="gc-name">Bonus Horaire</div>
-        <div class="gc-desc">+50 VLX gratuits toutes les heures</div>
-        <div id="bonus-label" class="gc-play">RÉCLAMER →</div>
-        <div id="bonus-timer" class="bonus-timer" style="display:none"></div>
-      </div>
-      <!-- CARTE ADMIN -->
-      <div class="game-card admin-card" id="admin-card" onclick="toggleAdminCard()">
-        <div class="gc-icon">🔐</div>
-        <div class="gc-name">Admin</div>
-        <div class="gc-desc">Accès réservé · Gestion des comptes</div>
-        <div class="gc-play" id="admin-card-label">ACCÉDER →</div>
-      </div>
-    </div>
+let currentUser = null, userData = null, unsubLB = null, currentPage = "login";
 
-    <!-- PANNEAU LOGIN ADMIN (caché par défaut) -->
-    <div id="admin-login-panel" class="admin-login-panel" style="display:none">
-      <div class="alp-title">🔐 Connexion Administrateur</div>
-      <div class="alp-fields">
-        <input id="admin-id-input" class="alp-input" placeholder="Identifiant" autocomplete="off"/>
-        <input id="admin-pw-input" class="alp-input" type="password" placeholder="Mot de passe"/>
-        <button class="alp-btn" onclick="tryAdminLogin()">Connexion</button>
-      </div>
-      <div id="admin-login-error" class="alp-error"></div>
-    </div>
-  </div>
-</div>
+// ── TOAST ──────────────────────────────────────────────────────
+function toast(msg, type = "") {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "toast show " + type;
+  clearTimeout(t._t); t._t = setTimeout(() => t.className = "toast", 3000);
+}
 
-<!-- PAGE 3 : DICE -->
-<div id="page-dice" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">🎲 Dice</div>
-    <div id="dice-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content">
-    <div class="dice-bar-wrap">
-      <div class="dice-bar-track">
-        <div id="dice-bar-win" class="dice-bar-win"></div>
-        <div id="dice-bar-marker" class="dice-bar-marker" style="display:none"></div>
-      </div>
-      <div class="dice-bar-labels">
-        <span>1</span><span>25</span><span>50</span><span>75</span><span>100</span>
-      </div>
-    </div>
-    <div class="dice-result-row">
-      <div id="dice-rolled" class="dice-rolled">—</div>
-      <div class="dice-vs">résultat</div>
-    </div>
-    <div class="dice-controls">
-      <div class="dice-ctrl-group">
-        <label class="bet-label">Seuil cible</label>
-        <div class="dice-number-row">
-          <button class="dice-adj-btn" onclick="adjustTarget(-5)">−5</button>
-          <button class="dice-adj-btn" onclick="adjustTarget(-1)">−1</button>
-          <div id="dice-target-display" class="dice-target-display">50</div>
-          <button class="dice-adj-btn" onclick="adjustTarget(1)">+1</button>
-          <button class="dice-adj-btn" onclick="adjustTarget(5)">+5</button>
-        </div>
-      </div>
-      <div class="dice-ctrl-group">
-        <label class="bet-label">Direction</label>
-        <div class="dice-dir-btns">
-          <button id="dir-under" class="dir-btn active" onclick="setDirection('under')">⬇ SOUS</button>
-          <button id="dir-over" class="dir-btn" onclick="setDirection('over')">⬆ SUR</button>
-        </div>
-      </div>
-      <div class="dice-ctrl-group">
-        <label class="bet-label">Multiplicateur</label>
-        <div id="dice-mult-display" class="dice-mult-display">×2.00</div>
-      </div>
-    </div>
-    <div class="bet-panel">
-      <label class="bet-label">Mise (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="dice-bet" class="bet-input" value="100" min="10"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('dice-bet', 0.5)">½</button>
-          <button onclick="quickBet('dice-bet', 2)">×2</button>
-          <button onclick="setMax('dice-bet')">MAX</button>
-        </div>
-      </div>
-      <button id="dice-roll-btn" class="btn-play" onclick="rollDice()">🎲 LANCER</button>
-    </div>
-  </div>
-</div>
+// ── NAVIGATION ─────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  currentPage = name;
+  updateAllBalances();
+}
+window.showPage = showPage;
 
-<!-- PAGE 4 : MINES -->
-<div id="page-mines" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">💣 Mines</div>
-    <div id="mines-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content mines-layout">
-    <div class="mines-sidebar">
-      <div class="mines-info">
-        <div class="info-row"><span>Mise</span><span id="mines-bet-display">—</span></div>
-        <div class="info-row"><span>Cases sûres</span><span id="mines-safe-count">0</span></div>
-        <div class="info-row"><span>Multiplicateur</span><span id="mines-multiplier">×1.00</span></div>
-        <div class="info-row"><span>Gain potentiel</span><span id="mines-potential">—</span></div>
+window.goToGame = function (game) {
+  if (game === "leaderboard") renderLeaderboard();
+  if (game === "dice") updateDiceUI();
+  showPage(game);
+};
+window.goToLobby = function () {
+  showPage("lobby");
+  initBonus();
+};
+
+function updateAllBalances() {
+  const bal = (userData?.balance ?? 0).toLocaleString("fr-FR") + " VLX";
+  ["dice", "mines", "coinflip"].forEach(id => {
+    const el = document.getElementById(id + "-balance");
+    if (el) el.textContent = bal;
+  });
+  const bd = document.getElementById("balance-display");
+  if (bd) bd.textContent = bal;
+}
+
+// ── AUTH ───────────────────────────────────────────────────────
+document.getElementById("google-login-btn").onclick = async () => {
+  try { await signInWithPopup(auth, googleProvider); }
+  catch (e) { document.getElementById("login-error").textContent = "Erreur : " + e.message; }
+};
+document.getElementById("logout-btn").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    currentUser = user;
+    await loadOrCreateUser(user);
+    if (!userData) return;
+    document.getElementById("user-avatar").src = user.photoURL || "";
+    document.getElementById("lobby-username").textContent = user.displayName || "";
+    startLeaderboard();
+    showPage("lobby");
+    initBonus();
+  } else {
+    currentUser = null; userData = null;
+    if (unsubLB) { unsubLB(); unsubLB = null; }
+    showPage("login");
+  }
+});
+
+async function loadOrCreateUser(user) {
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    const u = { uid: user.uid, name: user.displayName, avatar: user.photoURL, balance: 1500, gamesPlayed: 0, lastBonus: 0, createdAt: Date.now() };
+    await setDoc(ref, u);
+    userData = u;
+  } else {
+    userData = snap.data();
+    if (userData.banned) {
+      toast("Votre compte a été banni.", "lose");
+      userData = null;
+      await signOut(auth);
+    }
+  }
+}
+
+async function saveUserData() {
+  if (!currentUser) return;
+  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance, gamesPlayed: userData.gamesPlayed });
+  updateAllBalances();
+}
+
+// ── BET HELPERS ────────────────────────────────────────────────
+window.quickBet = (id, mult) => {
+  const el = document.getElementById(id);
+  el.value = Math.max(10, Math.round(Number(el.value) * mult));
+};
+window.setMax = id => { document.getElementById(id).value = userData?.balance ?? 0; };
+function parseBet(id) {
+  const v = Number(document.getElementById(id).value);
+  if (!Number.isFinite(v) || v < 10) { toast("Mise minimum : 10 VLX", "lose"); return null; }
+  if (v > userData.balance) { toast("Solde insuffisant !", "lose"); return null; }
+  return Math.floor(v);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   DICE
+// ═══════════════════════════════════════════════════════════════
+let diceTarget = 50, diceDirection = "under", diceRolling = false;
+
+function diceWinChance() {
+  return diceDirection === "under" ? (diceTarget - 1) / 100 : (100 - diceTarget) / 100;
+}
+function diceMultiplier() {
+  const c = diceWinChance();
+  return c <= 0 ? 0 : Math.round((0.98 / c) * 100) / 100;
+}
+function updateDiceUI() {
+  document.getElementById("dice-target-display").textContent = diceTarget;
+  document.getElementById("dice-mult-display").textContent = "×" + diceMultiplier().toFixed(2);
+  const bar = document.getElementById("dice-bar-win");
+  if (diceDirection === "under") {
+    bar.style.left = "0%"; bar.style.width = (diceTarget - 1) + "%"; bar.style.borderRadius = "22px 0 0 22px";
+  } else {
+    bar.style.left = diceTarget + "%"; bar.style.width = (100 - diceTarget) + "%"; bar.style.borderRadius = "0 22px 22px 0";
+  }
+}
+window.adjustTarget = d => { diceTarget = Math.max(2, Math.min(98, diceTarget + d)); updateDiceUI(); };
+window.setDirection = dir => {
+  diceDirection = dir;
+  document.getElementById("dir-under").classList.toggle("active", dir === "under");
+  document.getElementById("dir-over").classList.toggle("active", dir === "over");
+  updateDiceUI();
+};
+window.rollDice = async function () {
+  if (diceRolling) return;
+  const bet = parseBet("dice-bet"); if (!bet) return;
+  if (diceWinChance() <= 0) { toast("Zone impossible !", "lose"); return; }
+  diceRolling = true;
+  document.getElementById("dice-roll-btn").disabled = true;
+  const result = Math.floor(Math.random() * 100) + 1;
+  const marker = document.getElementById("dice-bar-marker");
+  marker.style.display = "block"; marker.style.transition = "none"; marker.style.left = "0%";
+  await delay(50);
+  marker.style.transition = "left 0.9s cubic-bezier(.25,.8,.25,1)";
+  marker.style.left = result + "%";
+  await delay(1000);
+  const won = diceDirection === "under" ? result < diceTarget : result > diceTarget;
+  const mult = diceMultiplier();
+  userData.balance = Math.max(0, userData.balance + (won ? Math.round(bet * mult) - bet : -bet));
+  userData.gamesPlayed++;
+  await saveUserData();
+  const rolledEl = document.getElementById("dice-rolled");
+  rolledEl.textContent = result; rolledEl.className = "dice-rolled " + (won ? "win" : "lose");
+  const barWin = document.getElementById("dice-bar-win");
+  barWin.style.background = won ? "linear-gradient(90deg,var(--green),#2ecc71)" : "linear-gradient(90deg,var(--red),var(--red2))";
+  setTimeout(() => { barWin.style.background = "linear-gradient(90deg,var(--green),#2ecc71)"; }, 1500);
+  toast(won ? `Gagné ! +${Math.round(bet * mult)} VLX (×${mult.toFixed(2)}) 🎉` : `Perdu ${bet} VLX — résultat : ${result}`, won ? "win" : "lose");
+  await delay(400);
+  diceRolling = false;
+  document.getElementById("dice-roll-btn").disabled = false;
+};
+
+// ═══════════════════════════════════════════════════════════════
+//   MINES
+// ═══════════════════════════════════════════════════════════════
+const GRID_SIZE = 25, MINE_COUNT = 5;
+let minesActive = false, minesBet = 0, minesGrid = [], safeRevealed = 0;
+
+function getMinesMultiplier(safe) {
+  const t = [1, 1.18, 1.40, 1.68, 2.05, 2.55, 3.25, 4.25, 5.70, 8.0, 12, 19, 33, 65, 156, 500, 2000, 10000, 50000, 250000];
+  return t[Math.min(safe, t.length - 1)];
+}
+window.startMines = function () {
+  const bet = parseBet("mines-bet"); if (!bet) return;
+  minesBet = bet; safeRevealed = 0; minesActive = true;
+  userData.balance -= bet; updateAllBalances();
+  const pos = Array.from({ length: GRID_SIZE }, (_, i) => i); shuffle(pos);
+  minesGrid = Array(GRID_SIZE).fill(false);
+  for (let i = 0; i < MINE_COUNT; i++) minesGrid[pos[i]] = true;
+  renderMinesGrid(); updateMinesInfo();
+  document.getElementById("mines-start-btn").disabled = true;
+  document.getElementById("mines-cashout-btn").disabled = true;
+  document.getElementById("mines-bet").disabled = true;
+};
+window.cashoutMines = async function () {
+  if (!minesActive || safeRevealed < 2) return;
+  const mult = getMinesMultiplier(safeRevealed), win = Math.round(minesBet * mult);
+  userData.balance += win; userData.gamesPlayed++; minesActive = false;
+  await saveUserData();
+  toast(`Cashout ! +${win} VLX (×${mult.toFixed(2)}) 💰`, "win");
+  revealAllMines(); resetMinesButtons();
+};
+function revealCell(idx) {
+  if (!minesActive) return;
+  const cells = document.querySelectorAll(".mine-cell"), cell = cells[idx];
+  if (cell.classList.contains("revealed")) return;
+  cell.classList.add("revealed");
+  if (minesGrid[idx]) {
+    cell.classList.add("mine"); cell.textContent = "💣";
+    minesActive = false; userData.gamesPlayed++; saveUserData();
+    toast(`MINE ! Perdu ${minesBet} VLX 💥`, "lose");
+    revealAllMines(); resetMinesButtons();
+  } else {
+    cell.classList.add("safe"); cell.textContent = "✓";
+    safeRevealed++; updateMinesInfo();
+    if (safeRevealed >= 2) document.getElementById("mines-cashout-btn").disabled = false;
+    if (safeRevealed === GRID_SIZE - MINE_COUNT) {
+      const mult = getMinesMultiplier(safeRevealed), win = Math.round(minesBet * mult);
+      userData.balance += win; userData.gamesPlayed++; minesActive = false;
+      saveUserData(); toast(`Parfait ! +${win} VLX 🏆`, "win"); resetMinesButtons();
+    }
+  }
+}
+function updateMinesInfo() {
+  const mult = getMinesMultiplier(safeRevealed);
+  document.getElementById("mines-safe-count").textContent = safeRevealed;
+  document.getElementById("mines-multiplier").textContent = "×" + mult.toFixed(2);
+  document.getElementById("mines-bet-display").textContent = minesBet + " VLX";
+  document.getElementById("mines-potential").textContent = Math.round(minesBet * mult) + " VLX";
+}
+function renderMinesGrid() {
+  const g = document.getElementById("mines-grid"); g.innerHTML = "";
+  for (let i = 0; i < GRID_SIZE; i++) {
+    const c = document.createElement("div"); c.className = "mine-cell"; c.textContent = "?";
+    c.onclick = () => revealCell(i); g.appendChild(c);
+  }
+}
+function revealAllMines() {
+  document.querySelectorAll(".mine-cell").forEach((c, i) => {
+    if (minesGrid[i] && !c.classList.contains("revealed")) { c.classList.add("revealed", "mine"); c.textContent = "💣"; }
+  });
+}
+function resetMinesButtons() {
+  document.getElementById("mines-start-btn").disabled = false;
+  document.getElementById("mines-cashout-btn").disabled = true;
+  document.getElementById("mines-bet").disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   COINFLIP
+// ═══════════════════════════════════════════════════════════════
+let chosenSide = null, coinFlipping = false;
+window.chooseSide = function (side) {
+  if (coinFlipping) return;
+  chosenSide = side;
+  document.getElementById("choose-blue").classList.toggle("selected", side === "blue");
+  document.getElementById("choose-red").classList.toggle("selected", side === "red");
+  document.getElementById("coinflip-btn").disabled = false;
+};
+window.flipCoin = async function () {
+  if (!chosenSide || coinFlipping) return;
+  const bet = parseBet("coinflip-bet"); if (!bet) return;
+  coinFlipping = true; document.getElementById("coinflip-btn").disabled = true;
+  document.getElementById("coinflip-result").textContent = "";
+  const result = Math.random() < .5 ? "blue" : "red";
+  const coin = document.getElementById("coin"); coin.className = "coin flip-" + result;
+  await delay(1400);
+  const won = result === chosenSide;
+  userData.balance = Math.max(0, userData.balance + (won ? bet : -bet)); userData.gamesPlayed++;
+  await saveUserData();
+  document.getElementById("coinflip-result").innerHTML = won
+    ? `<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`
+    : `<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
+  toast(won ? `Correct ! +${bet} VLX` : `Perdu ${bet} VLX`, won ? "win" : "lose");
+  await delay(900);
+  coin.className = "coin"; coinFlipping = false; chosenSide = null;
+  document.getElementById("choose-blue").classList.remove("selected");
+  document.getElementById("choose-red").classList.remove("selected");
+  document.getElementById("coinflip-btn").disabled = true;
+};
+
+// ═══════════════════════════════════════════════════════════════
+//   LEADERBOARD
+// ═══════════════════════════════════════════════════════════════
+let leaderboardData = [];
+function startLeaderboard() {
+  const q = query(collection(db, "users"), orderBy("balance", "desc"), limit(20));
+  unsubLB = onSnapshot(q, snap => {
+    leaderboardData = snap.docs.map(d => d.data());
+    if (currentPage === "leaderboard") renderLeaderboard();
+  });
+}
+function renderLeaderboard() {
+  const list = document.getElementById("leaderboard-list");
+  if (!leaderboardData.length) { list.innerHTML = '<div class="lb-loading">Aucun joueur encore.</div>'; return; }
+  list.innerHTML = "";
+  leaderboardData.forEach((u, i) => {
+    const rank = i + 1, isYou = u.uid === currentUser?.uid;
+    const medals = ["🥇", "🥈", "🥉"];
+    const rankEl = rank <= 3 ? `<div class="lb-rank gold-rank">${medals[rank - 1]}</div>` : `<div class="lb-rank">#${rank}</div>`;
+    const e = document.createElement("div");
+    e.className = "lb-entry" + (rank <= 3 ? " top" + rank : "");
+    e.innerHTML = `${rankEl}<img class="lb-avatar" src="${u.avatar || ''}" onerror="this.style.display='none'" alt=""><span class="lb-name">${u.name || "Joueur"}${isYou ? '<span class="lb-you">VOUS</span>' : ''}</span><span class="lb-balance">${(u.balance || 0).toLocaleString("fr-FR")} VLX</span>`;
+    list.appendChild(e);
+  });
+}
+
+// ── UTILS ──────────────────────────────────────────────────────
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[arr[i], arr[j]] = [arr[j], arr[i]]; } }
+
+// ═══════════════════════════════════════════════════════════════
+//   BONUS HORAIRE
+// ═══════════════════════════════════════════════════════════════
+const BONUS_AMOUNT = 50, BONUS_COOLDOWN = 60 * 60 * 1000;
+let bonusInterval = null;
+
+function initBonus() {
+  clearInterval(bonusInterval);
+  updateBonusUI();
+  bonusInterval = setInterval(updateBonusUI, 1000);
+}
+function timeUntilNextBonus() {
+  return Math.max(0, (userData?.lastBonus || 0) + BONUS_COOLDOWN - Date.now());
+}
+function updateBonusUI() {
+  const card = document.getElementById("bonus-card");
+  const label = document.getElementById("bonus-label");
+  const timerEl = document.getElementById("bonus-timer");
+  if (!card) return;
+  const remaining = timeUntilNextBonus();
+  if (remaining <= 0) {
+    card.classList.add("ready"); card.classList.remove("claimed");
+    label.style.display = ""; label.textContent = "RÉCLAMER →";
+    timerEl.style.display = "none";
+  } else {
+    card.classList.remove("ready"); card.classList.add("claimed");
+    label.style.display = "none"; timerEl.style.display = "";
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    timerEl.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+}
+window.claimBonus = async function () {
+  if (timeUntilNextBonus() > 0 || !currentUser || !userData) return;
+  userData.balance += BONUS_AMOUNT;
+  userData.lastBonus = Date.now();
+  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance, lastBonus: userData.lastBonus });
+  updateAllBalances(); updateBonusUI();
+  toast(`+${BONUS_AMOUNT} VLX réclamés ! 🎁`, "win");
+};
+
+const lobbyObserver = new MutationObserver(() => {
+  if (document.getElementById("page-lobby")?.classList.contains("active")) initBonus();
+});
+lobbyObserver.observe(document.getElementById("page-lobby"), { attributes: true, attributeFilter: ["class"] });
+
+// ═══════════════════════════════════════════════════════════════
+//   ADMIN
+// ═══════════════════════════════════════════════════════════════
+const ADMIN_ID = "GABRIEL";
+const ADMIN_PW = "GABY2023+*";
+let adminSelectedUser = null;
+let allUsersData = [];
+
+// Toggle le panneau login admin sous la carte
+window.toggleAdminCard = function () {
+  const panel = document.getElementById("admin-login-panel");
+  const isVisible = panel.style.display !== "none";
+  panel.style.display = isVisible ? "none" : "block";
+  if (!isVisible) {
+    document.getElementById("admin-id-input").focus();
+    document.getElementById("admin-login-error").textContent = "";
+  }
+};
+
+window.tryAdminLogin = function () {
+  const id = document.getElementById("admin-id-input").value.trim();
+  const pw = document.getElementById("admin-pw-input").value;
+  const errEl = document.getElementById("admin-login-error");
+  if (id === ADMIN_ID && pw === ADMIN_PW) {
+    errEl.textContent = "";
+    document.getElementById("admin-id-input").value = "";
+    document.getElementById("admin-pw-input").value = "";
+    document.getElementById("admin-login-panel").style.display = "none";
+    loadAdminPanel();
+    showPage("admin");
+  } else {
+    errEl.textContent = "❌ Identifiant ou mot de passe incorrect.";
+  }
+};
+
+async function loadAdminPanel() {
+  const list = document.getElementById("admin-list");
+  list.innerHTML = '<div class="lb-loading">Chargement des joueurs...</div>';
+  const q = query(collection(db, "users"), orderBy("balance", "desc"));
+  const snap = await getDocs(q);
+  allUsersData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderAdminList();
+}
+
+function renderAdminList() {
+  const list = document.getElementById("admin-list");
+  list.innerHTML = "";
+  if (!allUsersData.length) {
+    list.innerHTML = '<div class="lb-loading">Aucun joueur trouvé.</div>';
+    return;
+  }
+  allUsersData.forEach(u => {
+    const e = document.createElement("div");
+    e.className = "admin-entry" + (u.banned ? " admin-banned" : "");
+    e.innerHTML = `
+      <img class="lb-avatar" src="${u.avatar || ''}" onerror="this.style.display='none'" alt="">
+      <div class="admin-entry-info">
+        <span class="admin-entry-name">${u.name || "Joueur"}${u.banned ? ' <span class="admin-ban-badge">BANNI</span>' : ''}</span>
+        <span class="admin-entry-balance">${(u.balance || 0).toLocaleString("fr-FR")} VLX</span>
       </div>
-      <label class="bet-label">Mise (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="mines-bet" class="bet-input" value="100" min="10"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('mines-bet', 0.5)">½</button>
-          <button onclick="quickBet('mines-bet', 2)">×2</button>
-          <button onclick="setMax('mines-bet')">MAX</button>
-        </div>
-      </div>
-      <button id="mines-start-btn" class="btn-play" onclick="startMines()">DÉMARRER</button>
-      <button id="mines-cashout-btn" class="btn-cashout" onclick="cashoutMines()" disabled>💰 CASHOUT</button>
-    </div>
-    <div id="mines-grid" class="mines-grid"></div>
-  </div>
-</div>
+      <button class="btn-admin-manage" onclick="openAdminModal('${u.id}')">⚙ Gérer</button>
+    `;
+    list.appendChild(e);
+  });
+}
 
-<!-- PAGE 5 : COINFLIP -->
-<div id="page-coinflip" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">🪙 Pile ou Face</div>
-    <div id="coinflip-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content coinflip-arena">
-    <div id="coin" class="coin">
-      <div class="coin-face coin-blue">🔵</div>
-      <div class="coin-back coin-red">🔴</div>
-    </div>
-    <div id="coinflip-result" class="coinflip-result"></div>
-    <div class="choice-btns">
-      <button class="choice-btn blue-btn" id="choose-blue" onclick="chooseSide('blue')">BLEU</button>
-      <button class="choice-btn red-btn" id="choose-red" onclick="chooseSide('red')">ROUGE</button>
-    </div>
-    <div class="bet-panel">
-      <label class="bet-label">Mise (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="coinflip-bet" class="bet-input" value="100" min="10"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('coinflip-bet', 0.5)">½</button>
-          <button onclick="quickBet('coinflip-bet', 2)">×2</button>
-          <button onclick="setMax('coinflip-bet')">MAX</button>
-        </div>
-      </div>
-      <button id="coinflip-btn" class="btn-play" onclick="flipCoin()" disabled>LANCER</button>
-    </div>
-  </div>
-</div>
+window.openAdminModal = function (uid) {
+  adminSelectedUser = allUsersData.find(u => u.id === uid);
+  if (!adminSelectedUser) return;
+  document.getElementById("admin-modal-username").textContent = adminSelectedUser.name || "Joueur";
+  document.getElementById("admin-modal-balance").textContent = (adminSelectedUser.balance || 0).toLocaleString("fr-FR") + " VLX";
+  document.getElementById("admin-amount").value = "";
+  document.getElementById("admin-modal").style.display = "flex";
+};
 
-<!-- PAGE 6 : LEADERBOARD -->
-<div id="page-leaderboard" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">🏆 Classement</div>
-    <div></div>
-  </div>
-  <div class="game-content">
-    <div id="leaderboard-list" class="leaderboard-list">
-      <div class="lb-loading">Chargement...</div>
-    </div>
-  </div>
-</div>
+window.closeAdminModal = function () {
+  document.getElementById("admin-modal").style.display = "none";
+  adminSelectedUser = null;
+};
 
-<!-- PAGE 7 : ADMIN -->
-<div id="page-admin" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour au lobby</button>
-    <div class="game-topbar-title">🔐 Panneau Admin</div>
-    <div></div>
-  </div>
-  <div class="game-content" style="justify-content:flex-start;padding-top:2rem;max-width:860px;">
-    <div id="admin-list" class="admin-list">
-      <div class="lb-loading">Chargement des joueurs...</div>
-    </div>
-  </div>
-</div>
+window.adminAdd = async function () {
+  if (!adminSelectedUser) return;
+  const amount = parseInt(document.getElementById("admin-amount").value);
+  if (!amount || amount <= 0) { toast("Montant invalide", "lose"); return; }
+  const newBal = (adminSelectedUser.balance || 0) + amount;
+  await updateDoc(doc(db, "users", adminSelectedUser.id), { balance: newBal });
+  adminSelectedUser.balance = newBal;
+  allUsersData.find(u => u.id === adminSelectedUser.id).balance = newBal;
+  document.getElementById("admin-modal-balance").textContent = newBal.toLocaleString("fr-FR") + " VLX";
+  renderAdminList();
+  toast(`✅ +${amount} VLX ajoutés à ${adminSelectedUser.name}`, "win");
+};
 
-<!-- MODAL ADMIN -->
-<div id="admin-modal" class="admin-modal-overlay" style="display:none">
-  <div class="admin-modal">
-    <div class="admin-modal-title">⚙️ Gérer le compte</div>
-    <div id="admin-modal-username" class="admin-modal-user"></div>
-    <div id="admin-modal-balance" class="admin-modal-bal"></div>
-    <label class="bet-label" style="margin-top:.5rem">Montant VLX</label>
-    <input type="number" id="admin-amount" class="bet-input" placeholder="Ex: 500" min="1" style="width:100%"/>
-    <div class="admin-modal-btns">
-      <button class="btn-admin-add" onclick="adminAdd()">➕ Ajouter</button>
-      <button class="btn-admin-remove" onclick="adminRemove()">➖ Retirer</button>
-    </div>
-    <div class="admin-modal-btns">
-      <button class="btn-admin-ban" onclick="adminBan()">🚫 Bannir / Débannir</button>
-      <button class="btn-admin-delete" onclick="adminDelete()">🗑️ Supprimer compte</button>
-    </div>
-    <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
-  </div>
-</div>
+window.adminRemove = async function () {
+  if (!adminSelectedUser) return;
+  const amount = parseInt(document.getElementById("admin-amount").value);
+  if (!amount || amount <= 0) { toast("Montant invalide", "lose"); return; }
+  const newBal = Math.max(0, (adminSelectedUser.balance || 0) - amount);
+  await updateDoc(doc(db, "users", adminSelectedUser.id), { balance: newBal });
+  adminSelectedUser.balance = newBal;
+  allUsersData.find(u => u.id === adminSelectedUser.id).balance = newBal;
+  document.getElementById("admin-modal-balance").textContent = newBal.toLocaleString("fr-FR") + " VLX";
+  renderAdminList();
+  toast(`-${amount} VLX retirés de ${adminSelectedUser.name}`, "lose");
+};
 
-<div id="toast" class="toast"></div>
-<script type="module" src="firebase-config.js"></script>
-<script type="module" src="app.js"></script>
-</body>
-</html>
+window.adminBan = async function () {
+  if (!adminSelectedUser) return;
+  const newBan = !adminSelectedUser.banned;
+  if (!confirm(`${newBan ? "Bannir" : "Débannir"} ${adminSelectedUser.name} ?`)) return;
+  await updateDoc(doc(db, "users", adminSelectedUser.id), { banned: newBan });
+  adminSelectedUser.banned = newBan;
+  allUsersData.find(u => u.id === adminSelectedUser.id).banned = newBan;
+  renderAdminList();
+  closeAdminModal();
+  toast(newBan ? `🚫 ${adminSelectedUser.name} a été banni` : `✅ ${adminSelectedUser.name} a été débanni`, newBan ? "lose" : "win");
+};
+
+window.adminDelete = async function () {
+  if (!adminSelectedUser) return;
+  if (!confirm(`Supprimer définitivement le compte de ${adminSelectedUser.name} ?`)) return;
+  await deleteDoc(doc(db, "users", adminSelectedUser.id));
+  allUsersData = allUsersData.filter(u => u.id !== adminSelectedUser.id);
+  renderAdminList();
+  closeAdminModal();
+  toast(`🗑️ Compte supprimé`, "lose");
+};
