@@ -79,7 +79,7 @@ window.quickBet = (id,mult) => {
 window.setMax = id => { document.getElementById(id).value=userData?.balance??0; };
 function parseBet(id) {
   const v=Number(document.getElementById(id).value);
-  if(!Number.isFinite(v)||v<10){toast("Mise minimum : 10 VLX","lose");return null;}
+  if(!Number.isFinite(v)||v<10){toast("Mise minimum : 5 VLX","lose");return null;}
   if(v>userData.balance){toast("Solde insuffisant !","lose");return null;}
   return Math.floor(v);
 }
