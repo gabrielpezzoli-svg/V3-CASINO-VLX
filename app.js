@@ -1,5 +1,5 @@
 // ============================================================
-//   CASINO VLX — APP.JS
+//   CASINO VLX — APP.JS (v2 - navigation par pages)
 // ============================================================
 
 import {
@@ -10,17 +10,45 @@ import {
 } from "./firebase-config.js";
 
 // ── STATE ────────────────────────────────────────────────────
-let currentUser   = null;
-let userData      = null;
-let unsubLB       = null;
+let currentUser  = null;
+let userData     = null;
+let unsubLB      = null;
+let currentPage  = "login";
 
 // ── TOAST ────────────────────────────────────────────────────
 function toast(msg, type = "") {
   const t = document.getElementById("toast");
-  t.textContent  = msg;
-  t.className    = "toast show " + type;
-  clearTimeout(t._timeout);
-  t._timeout = setTimeout(() => { t.className = "toast"; }, 3000);
+  t.textContent = msg;
+  t.className   = "toast show " + type;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = "toast"; }, 3000);
+}
+
+// ── PAGE NAVIGATION ──────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  currentPage = name;
+  updateAllBalances();
+}
+
+window.goToGame = function(game) {
+  if (game === "leaderboard") renderLeaderboard();
+  showPage(game);
+};
+
+window.goToLobby = function() {
+  showPage("lobby");
+};
+
+function updateAllBalances() {
+  const bal = (userData?.balance ?? 0).toLocaleString("fr-FR") + " VLX";
+  ["roulette","mines","coinflip"].forEach(id => {
+    const el = document.getElementById(id + "-balance");
+    if (el) el.textContent = bal;
+  });
+  const bd = document.getElementById("balance-display");
+  if (bd) bd.textContent = bal;
 }
 
 // ── AUTH ─────────────────────────────────────────────────────
@@ -32,17 +60,23 @@ document.getElementById("google-login-btn").onclick = async () => {
   }
 };
 
-document.getElementById("logout-btn").onclick = () => signOut(auth);
+document.getElementById("logout-btn").onclick = async () => {
+  await signOut(auth);
+};
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     await loadOrCreateUser(user);
-    showApp();
+    document.getElementById("user-avatar").src = user.photoURL || "";
+    document.getElementById("lobby-username").textContent = user.displayName || "";
+    startLeaderboard();
+    showPage("lobby");
   } else {
     currentUser = null;
     userData    = null;
-    showLogin();
+    if (unsubLB) { unsubLB(); unsubLB = null; }
+    showPage("login");
   }
 });
 
@@ -51,12 +85,9 @@ async function loadOrCreateUser(user) {
   const snap = await getDoc(ref);
   if (!snap.exists()) {
     const newUser = {
-      uid:      user.uid,
-      name:     user.displayName,
-      avatar:   user.photoURL,
-      balance:  1500,
-      gamesPlayed: 0,
-      createdAt: Date.now()
+      uid: user.uid, name: user.displayName,
+      avatar: user.photoURL, balance: 1500,
+      gamesPlayed: 0, createdAt: Date.now()
     };
     await setDoc(ref, newUser);
     userData = newUser;
@@ -68,68 +99,33 @@ async function loadOrCreateUser(user) {
 async function saveUserData() {
   if (!currentUser) return;
   await updateDoc(doc(db, "users", currentUser.uid), {
-    balance:     userData.balance,
+    balance: userData.balance,
     gamesPlayed: userData.gamesPlayed
   });
-  updateBalanceUI();
+  updateAllBalances();
 }
-
-// ── UI ───────────────────────────────────────────────────────
-function showApp() {
-  document.getElementById("login-screen").classList.remove("active");
-  document.getElementById("app-screen").classList.add("active");
-  document.getElementById("user-avatar").src   = currentUser.photoURL || "";
-  document.getElementById("user-name").textContent = currentUser.displayName || "";
-  updateBalanceUI();
-  switchTab("lobby");
-  startLeaderboard();
-}
-
-function showLogin() {
-  document.getElementById("app-screen").classList.remove("active");
-  document.getElementById("login-screen").classList.add("active");
-  if (unsubLB) { unsubLB(); unsubLB = null; }
-}
-
-function updateBalanceUI() {
-  document.getElementById("balance-display").textContent =
-    (userData?.balance ?? 0).toLocaleString("fr-FR") + " VLX";
-}
-
-// ── NAVIGATION ───────────────────────────────────────────────
-window.switchTab = function(name) {
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-  document.getElementById("tab-" + name)?.classList.add("active");
-  document.querySelector(`.nav-btn[data-tab="${name}"]`)?.classList.add("active");
-  if (name === "leaderboard") renderLeaderboard();
-};
-
-document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.onclick = () => switchTab(btn.dataset.tab);
-});
 
 // ── BET HELPERS ──────────────────────────────────────────────
-window.quickBet = function(id, mult) {
+window.quickBet = (id, mult) => {
   const el = document.getElementById(id);
   el.value = Math.max(10, Math.round(Number(el.value) * mult));
 };
-window.setMax = function(id) {
+window.setMax = (id) => {
   document.getElementById(id).value = userData?.balance ?? 0;
 };
 
 function parseBet(id) {
   const val = Number(document.getElementById(id).value);
   if (!Number.isFinite(val) || val < 10) { toast("Mise minimum : 10 VLX", "lose"); return null; }
-  if (val > userData.balance) { toast("Solde insuffisant !", "lose"); return null; }
+  if (val > userData.balance)             { toast("Solde insuffisant !", "lose"); return null; }
   return Math.floor(val);
 }
 
 // ════════════════════════════════════════════════════════════
 //   ROULETTE
 // ════════════════════════════════════════════════════════════
-// Segments in order (every 72°): ×0, ×0.5, ×1, ×2, ×5
 const ROULETTE_SEGMENTS = [0, 0.5, 1, 2, 5];
+const SEG_LABELS = ["×0","×0.5","×1","×2","×5"];
 let rouletteSpinning = false;
 let currentRotation  = 0;
 
@@ -142,18 +138,12 @@ window.spinRoulette = async function() {
   document.getElementById("roulette-spin-btn").disabled = true;
   document.getElementById("roulette-result").textContent = "";
 
-  // pick random segment
   const segIdx = Math.floor(Math.random() * 5);
   const mult   = ROULETTE_SEGMENTS[segIdx];
-
-  // spin to that segment (pointer at top = 0°)
-  // each segment = 72°. Center of segment i = i*72 + 36°.
-  // We want center of segIdx segment under pointer (top).
-  // Add extra full rotations for drama.
   const extraSpins = (5 + Math.floor(Math.random() * 5)) * 360;
   const segCenter  = segIdx * 72 + 36;
   const target     = extraSpins + (360 - segCenter);
-  currentRotation  = (currentRotation + target) % 36000 + target;
+  currentRotation += target;
 
   const wheel = document.getElementById("roulette-wheel");
   wheel.style.transition = "transform 3s cubic-bezier(0.25,0.1,0.1,1)";
@@ -161,7 +151,6 @@ window.spinRoulette = async function() {
 
   await delay(3200);
 
-  // apply result
   const gain = Math.round(bet * mult) - bet;
   userData.balance = Math.max(0, userData.balance + gain);
   userData.gamesPlayed++;
@@ -171,19 +160,19 @@ window.spinRoulette = async function() {
   if (mult === 0) {
     resultEl.textContent = "×0 — Perdu !";
     resultEl.style.color = "var(--red2)";
-    toast(`Perdu ${bet} VLX !`, "lose");
-  } else if (mult < 1) {
-    resultEl.textContent = `×0.5 — +${Math.round(bet*0.5)} VLX`;
+    toast(`Perdu ${bet} VLX`, "lose");
+  } else if (mult === 0.5) {
+    resultEl.textContent = `×0.5 → +${Math.round(bet*0.5)} VLX`;
     resultEl.style.color = "var(--gold)";
-    toast(`×0.5 → +${Math.round(bet*0.5)} VLX`, "");
+    toast(`×0.5 — +${Math.round(bet*0.5)} VLX`, "");
   } else if (mult === 1) {
     resultEl.textContent = "×1 — Mise remboursée";
     resultEl.style.color = "var(--text)";
     toast("Mise remboursée !", "");
   } else {
-    resultEl.textContent = `×${mult} — +${Math.round(bet*mult)} VLX 🎉`;
+    resultEl.textContent = `×${mult} — GAGNÉ ! +${Math.round(bet*mult)} VLX 🎉`;
     resultEl.style.color = "var(--green2)";
-    toast(`×${mult} GAGNÉ ! +${Math.round(bet*mult)} VLX 🎉`, "win");
+    toast(`×${mult} ! +${Math.round(bet*mult)} VLX 🎉`, "win");
   }
 
   rouletteSpinning = false;
@@ -193,18 +182,16 @@ window.spinRoulette = async function() {
 // ════════════════════════════════════════════════════════════
 //   MINES
 // ════════════════════════════════════════════════════════════
-const GRID_SIZE   = 25;
-const MINE_COUNT  = 5;
-let minesActive   = false;
-let minesBet      = 0;
-let minesGrid     = []; // true = mine
-let safeRevealed  = 0;
+const GRID_SIZE  = 25;
+const MINE_COUNT = 5;
+let minesActive  = false;
+let minesBet     = 0;
+let minesGrid    = [];
+let safeRevealed = 0;
 
-// Multiplier table: safe cells revealed → multiplier
 function getMinesMultiplier(safe) {
-  // grows based on probability; handcrafted curve
-  const table = [1, 1.18, 1.40, 1.68, 2.05, 2.55, 3.25, 4.25, 5.70, 8.0,
-                 12.0, 19.0, 33.0, 65.0, 156.0, 500.0, 2000.0, 10000.0, 50000.0, 250000.0];
+  const table = [1,1.18,1.40,1.68,2.05,2.55,3.25,4.25,5.70,8.0,
+                 12.0,19.0,33.0,65.0,156.0,500.0,2000.0,10000.0,50000.0,250000.0];
   return table[Math.min(safe, table.length-1)];
 }
 
@@ -216,9 +203,8 @@ window.startMines = function() {
   safeRevealed = 0;
   minesActive  = true;
   userData.balance -= bet;
-  updateBalanceUI();
+  updateAllBalances();
 
-  // Place mines randomly
   const positions = Array.from({length:GRID_SIZE},(_,i)=>i);
   shuffle(positions);
   minesGrid = Array(GRID_SIZE).fill(false);
@@ -226,21 +212,20 @@ window.startMines = function() {
 
   renderMinesGrid();
   updateMinesInfo();
-
-  document.getElementById("mines-start-btn").disabled  = true;
+  document.getElementById("mines-start-btn").disabled   = true;
   document.getElementById("mines-cashout-btn").disabled = true;
   document.getElementById("mines-bet").disabled         = true;
 };
 
 window.cashoutMines = async function() {
   if (!minesActive || safeRevealed < 2) return;
-  const mult  = getMinesMultiplier(safeRevealed);
-  const winAmount = Math.round(minesBet * mult);
-  userData.balance += winAmount;
+  const mult   = getMinesMultiplier(safeRevealed);
+  const win    = Math.round(minesBet * mult);
+  userData.balance += win;
   userData.gamesPlayed++;
   minesActive = false;
   await saveUserData();
-  toast(`Cashout ! +${winAmount} VLX (×${mult.toFixed(2)}) 💰`, "win");
+  toast(`Cashout ! +${win} VLX (×${mult.toFixed(2)}) 💰`, "win");
   revealAllMines();
   resetMinesButtons();
 };
@@ -250,17 +235,15 @@ function revealCell(idx) {
   const cells = document.querySelectorAll(".mine-cell");
   const cell  = cells[idx];
   if (cell.classList.contains("revealed")) return;
-
   cell.classList.add("revealed");
 
   if (minesGrid[idx]) {
-    // MINE!
     cell.classList.add("mine");
     cell.textContent = "💣";
     minesActive = false;
     userData.gamesPlayed++;
     saveUserData();
-    toast(`MINE ! Perdu ${minesBet} VLX`, "lose");
+    toast(`MINE ! Perdu ${minesBet} VLX 💥`, "lose");
     revealAllMines();
     resetMinesButtons();
   } else {
@@ -268,10 +251,7 @@ function revealCell(idx) {
     cell.textContent = "✓";
     safeRevealed++;
     updateMinesInfo();
-    if (safeRevealed >= 2) {
-      document.getElementById("mines-cashout-btn").disabled = false;
-    }
-    // Win condition: all safe cells revealed
+    if (safeRevealed >= 2) document.getElementById("mines-cashout-btn").disabled = false;
     if (safeRevealed === GRID_SIZE - MINE_COUNT) {
       const mult = getMinesMultiplier(safeRevealed);
       const win  = Math.round(minesBet * mult);
@@ -298,16 +278,15 @@ function renderMinesGrid() {
   grid.innerHTML = "";
   for (let i=0;i<GRID_SIZE;i++) {
     const cell = document.createElement("div");
-    cell.className = "mine-cell";
+    cell.className   = "mine-cell";
     cell.textContent = "?";
-    cell.onclick = () => revealCell(i);
+    cell.onclick     = () => revealCell(i);
     grid.appendChild(cell);
   }
 }
 
 function revealAllMines() {
-  const cells = document.querySelectorAll(".mine-cell");
-  cells.forEach((cell, i) => {
+  document.querySelectorAll(".mine-cell").forEach((cell,i) => {
     if (minesGrid[i] && !cell.classList.contains("revealed")) {
       cell.classList.add("revealed","mine");
       cell.textContent = "💣";
@@ -324,14 +303,14 @@ function resetMinesButtons() {
 // ════════════════════════════════════════════════════════════
 //   COINFLIP
 // ════════════════════════════════════════════════════════════
-let chosenSide    = null;
-let coinFlipping  = false;
+let chosenSide   = null;
+let coinFlipping = false;
 
 window.chooseSide = function(side) {
   if (coinFlipping) return;
   chosenSide = side;
   document.getElementById("choose-blue").classList.toggle("selected", side==="blue");
-  document.getElementById("choose-red").classList.toggle("selected", side==="red");
+  document.getElementById("choose-red").classList.toggle("selected",  side==="red");
   document.getElementById("coinflip-btn").disabled = false;
 };
 
@@ -341,30 +320,30 @@ window.flipCoin = async function() {
   if (bet === null) return;
 
   coinFlipping = true;
-  document.getElementById("coinflip-btn").disabled = true;
+  document.getElementById("coinflip-btn").disabled   = true;
   document.getElementById("coinflip-result").textContent = "";
 
   const result = Math.random() < 0.5 ? "blue" : "red";
   const coin   = document.getElementById("coin");
   coin.className = "coin flip-" + result;
 
-  await delay(1200);
+  await delay(1400);
 
   const won = result === chosenSide;
-  if (won) {
-    userData.balance += bet;
-    document.getElementById("coinflip-result").innerHTML = `<span style="color:var(--green2)">Gagné +${bet} VLX ! 🎉</span>`;
-    toast(`Correct ! +${bet} VLX`, "win");
-  } else {
-    userData.balance -= bet;
-    document.getElementById("coinflip-result").innerHTML = `<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
-    toast(`Perdu ${bet} VLX`, "lose");
-  }
-  userData.balance   = Math.max(0, userData.balance);
+  userData.balance = Math.max(0, userData.balance + (won ? bet : -bet));
   userData.gamesPlayed++;
   await saveUserData();
 
-  await delay(800);
+  const resultEl = document.getElementById("coinflip-result");
+  if (won) {
+    resultEl.innerHTML = `<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`;
+    toast(`Correct ! +${bet} VLX`, "win");
+  } else {
+    resultEl.innerHTML = `<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
+    toast(`Perdu ${bet} VLX`, "lose");
+  }
+
+  await delay(900);
   coin.className = "coin";
   coinFlipping   = false;
   chosenSide     = null;
@@ -380,45 +359,42 @@ let leaderboardData = [];
 
 function startLeaderboard() {
   const q = query(collection(db,"users"), orderBy("balance","desc"), limit(20));
-  unsubLB = onSnapshot(q, (snap) => {
+  unsubLB = onSnapshot(q, snap => {
     leaderboardData = snap.docs.map(d => d.data());
-    if (document.getElementById("tab-leaderboard").classList.contains("active")) {
-      renderLeaderboard();
-    }
+    if (currentPage === "leaderboard") renderLeaderboard();
   });
 }
 
 function renderLeaderboard() {
   const list = document.getElementById("leaderboard-list");
-  if (!leaderboardData.length) { list.innerHTML = '<div class="lb-loading">Aucun joueur.</div>'; return; }
+  if (!leaderboardData.length) { list.innerHTML='<div class="lb-loading">Aucun joueur encore.</div>'; return; }
 
   list.innerHTML = "";
   leaderboardData.forEach((u, i) => {
-    const rank  = i + 1;
-    const isYou = u.uid === currentUser?.uid;
+    const rank   = i + 1;
+    const isYou  = u.uid === currentUser?.uid;
     const medals = ["🥇","🥈","🥉"];
-    const rankEl = rank <= 3 ? `<div class="lb-rank gold-rank">${medals[rank-1]}</div>`
-                              : `<div class="lb-rank">#${rank}</div>`;
+    const rankEl = rank<=3
+      ? `<div class="lb-rank gold-rank">${medals[rank-1]}</div>`
+      : `<div class="lb-rank">#${rank}</div>`;
+
     const entry = document.createElement("div");
     entry.className = "lb-entry" + (rank<=3?" top"+rank:"");
     entry.innerHTML = `
       ${rankEl}
-      <div style="display:flex;align-items:center;gap:.5rem">
-        <img class="lb-avatar" src="${u.avatar||''}" onerror="this.src=''" alt="">
-        <span class="lb-name">${u.name||"Joueur"}${isYou?'<span class="lb-you">VOUS</span>':''}</span>
-      </div>
-      <div class="lb-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</div>
-      <div class="lb-games">${u.gamesPlayed||0} parties</div>
+      <img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt="">
+      <span class="lb-name">${u.name||"Joueur"}${isYou?'<span class="lb-you">VOUS</span>':''}</span>
+      <span class="lb-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>
     `;
     list.appendChild(entry);
   });
 }
 
 // ── UTILS ────────────────────────────────────────────────────
-function delay(ms) { return new Promise(r => setTimeout(r,ms)); }
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 function shuffle(arr) {
   for (let i=arr.length-1;i>0;i--) {
-    const j=Math.floor(Math.random()*(i+1));
-    [arr[i],arr[j]]=[arr[j],arr[i]];
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
   }
 }
