@@ -303,7 +303,7 @@ function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Mat
 // ═══════════════════════════════════════════════════════════════
 //   BONUS HORAIRE
 // ═══════════════════════════════════════════════════════════════
-const BONUS_AMOUNT = 50, BONUS_COOLDOWN = 60 * 60 * 1000;
+const BONUS_AMOUNT = 50, BONUS_COOLDOWN = 5 * 60 * 1000;
 let bonusInterval = null;
 
 function initBonus() {
