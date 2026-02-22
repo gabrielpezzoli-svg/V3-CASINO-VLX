@@ -62,7 +62,7 @@ async function loadOrCreateUser(user) {
   const ref = doc(db,"users",user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
-    const u = {uid:user.uid,name:user.displayName,avatar:user.photoURL,balance:1500,gamesPlayed:0,createdAt:Date.now()};
+    const u = {uid:user.uid,name:user.displayName,avatar:user.photoURL,balance:1500,gamesPlayed:0,lastBonus:0,createdAt:Date.now()};
     await setDoc(ref,u); userData=u;
   } else userData=snap.data();
 }
@@ -348,3 +348,95 @@ function renderLeaderboard() {
 // ── UTILS ─────────────────────────────────────────────────────
 function delay(ms){return new Promise(r=>setTimeout(r,ms));}
 function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}}
+
+// ═════════════════════════════════════════════════════════════
+//   BONUS HORAIRE
+// ═════════════════════════════════════════════════════════════
+const BONUS_AMOUNT   = 50;
+const BONUS_COOLDOWN = 60 * 60 * 1000; // 1 heure en ms
+let bonusInterval    = null;
+
+// Appelé à chaque connexion/changement de page
+function initBonus() {
+  clearInterval(bonusInterval);
+  updateBonusUI();
+  bonusInterval = setInterval(updateBonusUI, 1000);
+}
+
+function getLastClaim() {
+  // Stocké dans Firestore sur userData, sinon 0
+  return userData?.lastBonus || 0;
+}
+
+function timeUntilNextBonus() {
+  const last = getLastClaim();
+  const next = last + BONUS_COOLDOWN;
+  return Math.max(0, next - Date.now());
+}
+
+function updateBonusUI() {
+  const card       = document.getElementById("bonus-card");
+  const label      = document.getElementById("bonus-label");
+  const timerEl    = document.getElementById("bonus-timer");
+  if (!card) return;
+
+  const remaining = timeUntilNextBonus();
+
+  if (remaining <= 0) {
+    // Bonus disponible
+    card.classList.add("ready");
+    card.classList.remove("claimed");
+    label.style.display  = "";
+    label.textContent    = "RÉCLAMER →";
+    timerEl.style.display = "none";
+  } else {
+    // En cooldown
+    card.classList.remove("ready");
+    card.classList.add("claimed");
+    label.style.display   = "none";
+    timerEl.style.display = "";
+
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    timerEl.textContent = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  }
+}
+
+window.claimBonus = async function() {
+  if (timeUntilNextBonus() > 0) return; // encore en cooldown
+  if (!currentUser || !userData) return;
+
+  userData.balance  += BONUS_AMOUNT;
+  userData.lastBonus = Date.now();
+
+  await updateDoc(doc(db, "users", currentUser.uid), {
+    balance:   userData.balance,
+    lastBonus: userData.lastBonus
+  });
+
+  updateAllBalances();
+  updateBonusUI();
+  toast(`+${BONUS_AMOUNT} VLX réclamés ! 🎁`, "win");
+};
+
+// Patch de showPage pour lancer initBonus au lobby
+const _origShowPage = showPage;
+// On réinitialise le timer chaque fois qu'on revient au lobby
+const _origGoToLobby = window.goToLobby;
+window.goToLobby = function() {
+  showPage("lobby");
+  initBonus();
+};
+
+// Aussi au login initial
+const origAuth = onAuthStateChanged;
+// On appelle initBonus après le login — patch dans onAuthStateChanged callback déjà fait ci-dessus
+// Donc on l'appelle directement après showPage("lobby") dans le bloc onAuthStateChanged.
+// Pour ça, on surveille quand page-lobby devient active:
+const lobbyObserver = new MutationObserver(() => {
+  if (document.getElementById("page-lobby")?.classList.contains("active")) {
+    initBonus();
+  }
+});
+lobbyObserver.observe(document.getElementById("page-lobby"), { attributes: true, attributeFilter: ["class"] });
