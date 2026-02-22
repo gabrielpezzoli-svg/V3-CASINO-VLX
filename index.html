@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Casino VLX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@400;500&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ========== LOGIN SCREEN ========== -->
+<div id="login-screen" class="screen active">
+  <div class="login-bg">
+    <div class="bg-glow"></div>
+    <div class="bg-glow glow2"></div>
+    <div class="card-suits">♠ ♥ ♦ ♣</div>
+  </div>
+  <div class="login-box">
+    <div class="logo">
+      <span class="logo-v">V</span><span class="logo-lx">LX</span>
+      <div class="logo-sub">CASINO</div>
+    </div>
+    <p class="login-desc">Commencez avec <strong>1 500 VLX</strong>.<br>Montez au sommet du classement.</p>
+    <button id="google-login-btn" class="btn-google">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.7-6.7C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.6 2.6 13.7l7.8 6C12.4 13.3 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.4 28.3A14.6 14.6 0 0 1 9.5 24c0-1.5.3-3 .9-4.3l-7.8-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.4z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.3-7.7 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.8 6A23.9 23.9 0 0 0 24 48z"/></svg>
+      Connexion avec Google
+    </button>
+    <div id="login-error" class="login-error"></div>
+  </div>
+</div>
+
+<!-- ========== MAIN APP ========== -->
+<div id="app-screen" class="screen">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-logo">VLX <span>CASINO</span></div>
+    <div class="header-balance">
+      <span class="balance-label">Solde</span>
+      <span id="balance-display" class="balance-amount">0 VLX</span>
+    </div>
+    <div class="header-user">
+      <img id="user-avatar" src="" alt="avatar" class="avatar"/>
+      <span id="user-name"></span>
+      <button id="logout-btn" class="btn-logout">Déco</button>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <nav class="app-nav">
+    <button class="nav-btn active" data-tab="lobby">🎰 Lobby</button>
+    <button class="nav-btn" data-tab="roulette">🎡 Roulette</button>
+    <button class="nav-btn" data-tab="mines">💣 Mines</button>
+    <button class="nav-btn" data-tab="coinflip">🪙 Pile ou Face</button>
+    <button class="nav-btn" data-tab="leaderboard">🏆 Classement</button>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="app-content">
+
+    <!-- LOBBY -->
+    <div id="tab-lobby" class="tab active">
+      <div class="lobby-hero">
+        <h1>Bienvenue au <span class="gold">Casino VLX</span></h1>
+        <p>Pariez, gagnez, dominez le classement.</p>
+        <div class="lobby-cards">
+          <div class="game-card" onclick="switchTab('roulette')">
+            <div class="gc-icon">🎡</div>
+            <div class="gc-name">Roulette</div>
+            <div class="gc-desc">x0 · x0.5 · x1 · x2 · x5</div>
+          </div>
+          <div class="game-card" onclick="switchTab('mines')">
+            <div class="gc-icon">💣</div>
+            <div class="gc-name">Mines</div>
+            <div class="gc-desc">5×5 · 5 mines · Cashout libre</div>
+          </div>
+          <div class="game-card" onclick="switchTab('coinflip')">
+            <div class="gc-icon">🪙</div>
+            <div class="gc-name">Pile ou Face</div>
+            <div class="gc-desc">Bleu ou Rouge · x2</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROULETTE -->
+    <div id="tab-roulette" class="tab">
+      <div class="game-container">
+        <h2 class="game-title">🎡 Roulette VLX</h2>
+        <div class="roulette-wheel-wrap">
+          <div id="roulette-wheel" class="roulette-wheel">
+            <div class="wheel-inner">
+              <div class="wheel-segment seg-0" style="--i:0">×0</div>
+              <div class="wheel-segment seg-05" style="--i:1">×0.5</div>
+              <div class="wheel-segment seg-1" style="--i:2">×1</div>
+              <div class="wheel-segment seg-2" style="--i:3">×2</div>
+              <div class="wheel-segment seg-5" style="--i:4">×5</div>
+            </div>
+          </div>
+          <div class="wheel-pointer">▼</div>
+          <div id="roulette-result" class="roulette-result"></div>
+        </div>
+        <div class="bet-area">
+          <label>Mise (VLX)</label>
+          <div class="bet-row">
+            <input type="number" id="roulette-bet" class="bet-input" value="100" min="10"/>
+            <div class="quick-bets">
+              <button onclick="quickBet('roulette-bet', 0.5)">½</button>
+              <button onclick="quickBet('roulette-bet', 2)">×2</button>
+              <button onclick="setMax('roulette-bet')">MAX</button>
+            </div>
+          </div>
+          <button id="roulette-spin-btn" class="btn-play" onclick="spinRoulette()">LANCER</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MINES -->
+    <div id="tab-mines" class="tab">
+      <div class="game-container">
+        <h2 class="game-title">💣 Mines VLX</h2>
+        <div class="mines-layout">
+          <div class="mines-sidebar">
+            <div class="mines-info">
+              <div class="info-row"><span>Mise</span><span id="mines-bet-display">—</span></div>
+              <div class="info-row"><span>Cases sûres</span><span id="mines-safe-count">0</span></div>
+              <div class="info-row"><span>Multiplicateur</span><span id="mines-multiplier">×1.00</span></div>
+              <div class="info-row"><span>Gain potentiel</span><span id="mines-potential">—</span></div>
+            </div>
+            <div class="bet-area">
+              <label>Mise (VLX)</label>
+              <div class="bet-row">
+                <input type="number" id="mines-bet" class="bet-input" value="100" min="10"/>
+                <div class="quick-bets">
+                  <button onclick="quickBet('mines-bet', 0.5)">½</button>
+                  <button onclick="quickBet('mines-bet', 2)">×2</button>
+                  <button onclick="setMax('mines-bet')">MAX</button>
+                </div>
+              </div>
+              <button id="mines-start-btn" class="btn-play" onclick="startMines()">DÉMARRER</button>
+              <button id="mines-cashout-btn" class="btn-cashout" onclick="cashoutMines()" disabled>CASHOUT</button>
+            </div>
+          </div>
+          <div id="mines-grid" class="mines-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COINFLIP -->
+    <div id="tab-coinflip" class="tab">
+      <div class="game-container">
+        <h2 class="game-title">🪙 Pile ou Face</h2>
+        <div class="coinflip-arena">
+          <div id="coin" class="coin">
+            <div class="coin-face coin-blue">🔵</div>
+            <div class="coin-back coin-red">🔴</div>
+          </div>
+          <div id="coinflip-result" class="coinflip-result"></div>
+          <div class="choice-btns">
+            <button class="choice-btn blue-btn" id="choose-blue" onclick="chooseSide('blue')">BLEU</button>
+            <button class="choice-btn red-btn" id="choose-red" onclick="chooseSide('red')">ROUGE</button>
+          </div>
+          <div class="bet-area">
+            <label>Mise (VLX)</label>
+            <div class="bet-row">
+              <input type="number" id="coinflip-bet" class="bet-input" value="100" min="10"/>
+              <div class="quick-bets">
+                <button onclick="quickBet('coinflip-bet', 0.5)">½</button>
+                <button onclick="quickBet('coinflip-bet', 2)">×2</button>
+                <button onclick="setMax('coinflip-bet')">MAX</button>
+              </div>
+            </div>
+            <button id="coinflip-btn" class="btn-play" onclick="flipCoin()" disabled>LANCER</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div id="tab-leaderboard" class="tab">
+      <div class="game-container">
+        <h2 class="game-title">🏆 Classement Global</h2>
+        <div id="leaderboard-list" class="leaderboard-list">
+          <div class="lb-loading">Chargement...</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<!-- Firebase -->
+<script type="module" src="firebase-config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
