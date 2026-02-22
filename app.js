@@ -301,7 +301,7 @@ function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 function shuffle(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[arr[i], arr[j]] = [arr[j], arr[i]]; } }
 
 // ═══════════════════════════════════════════════════════════════
-//   BONUS HORAIRE
+//   BONUS — toutes les 5 minutes
 // ═══════════════════════════════════════════════════════════════
 const BONUS_AMOUNT = 50, BONUS_COOLDOWN = 5 * 60 * 1000;
 let bonusInterval = null;
@@ -327,10 +327,9 @@ function updateBonusUI() {
   } else {
     card.classList.remove("ready"); card.classList.add("claimed");
     label.style.display = "none"; timerEl.style.display = "";
-    const h = Math.floor(remaining / 3600000);
-    const m = Math.floor((remaining % 3600000) / 60000);
+    const m = Math.floor(remaining / 60000);
     const s = Math.floor((remaining % 60000) / 1000);
-    timerEl.textContent = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    timerEl.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 }
 window.claimBonus = async function () {
