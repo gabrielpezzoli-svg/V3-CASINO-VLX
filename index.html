@@ -33,21 +33,6 @@
       Connexion avec Google
     </button>
     <div id="login-error" class="login-error"></div>
-
-    <!-- BOUTON ADMIN -->
-    <div class="admin-toggle-wrap">
-      <button class="admin-toggle-btn" onclick="showAdminLogin()">🔐 Accès Administrateur</button>
-    </div>
-
-    <!-- FORMULAIRE ADMIN -->
-    <div id="admin-login-box" class="admin-login-box" style="display:none;">
-      <div class="admin-login-title">CONNEXION ADMINISTRATEUR</div>
-      <input id="admin-id-input" class="bet-input admin-input" placeholder="Identifiant" autocomplete="off"/>
-      <input id="admin-pw-input" class="bet-input admin-input" type="password" placeholder="Mot de passe"/>
-      <button class="btn-play" onclick="tryAdminLogin()" style="padding:.7rem;font-size:.95rem;">Connexion</button>
-      <div id="admin-login-error" class="admin-login-error"></div>
-    </div>
-
   </div>
 </div>
 
@@ -98,6 +83,24 @@
         <div id="bonus-label" class="gc-play">RÉCLAMER →</div>
         <div id="bonus-timer" class="bonus-timer" style="display:none"></div>
       </div>
+      <!-- CARTE ADMIN -->
+      <div class="game-card admin-card" id="admin-card" onclick="toggleAdminCard()">
+        <div class="gc-icon">🔐</div>
+        <div class="gc-name">Admin</div>
+        <div class="gc-desc">Accès réservé · Gestion des comptes</div>
+        <div class="gc-play" id="admin-card-label">ACCÉDER →</div>
+      </div>
+    </div>
+
+    <!-- PANNEAU LOGIN ADMIN (caché par défaut) -->
+    <div id="admin-login-panel" class="admin-login-panel" style="display:none">
+      <div class="alp-title">🔐 Connexion Administrateur</div>
+      <div class="alp-fields">
+        <input id="admin-id-input" class="alp-input" placeholder="Identifiant" autocomplete="off"/>
+        <input id="admin-pw-input" class="alp-input" type="password" placeholder="Mot de passe"/>
+        <button class="alp-btn" onclick="tryAdminLogin()">Connexion</button>
+      </div>
+      <div id="admin-login-error" class="alp-error"></div>
     </div>
   </div>
 </div>
@@ -138,7 +141,7 @@
         <label class="bet-label">Direction</label>
         <div class="dice-dir-btns">
           <button id="dir-under" class="dir-btn active" onclick="setDirection('under')">⬇ SOUS</button>
-          <button id="dir-over"  class="dir-btn"        onclick="setDirection('over')">⬆ SUR</button>
+          <button id="dir-over" class="dir-btn" onclick="setDirection('over')">⬆ SUR</button>
         </div>
       </div>
       <div class="dice-ctrl-group">
@@ -207,7 +210,7 @@
     <div id="coinflip-result" class="coinflip-result"></div>
     <div class="choice-btns">
       <button class="choice-btn blue-btn" id="choose-blue" onclick="chooseSide('blue')">BLEU</button>
-      <button class="choice-btn red-btn"  id="choose-red"  onclick="chooseSide('red')">ROUGE</button>
+      <button class="choice-btn red-btn" id="choose-red" onclick="chooseSide('red')">ROUGE</button>
     </div>
     <div class="bet-panel">
       <label class="bet-label">Mise (VLX)</label>
@@ -241,11 +244,11 @@
 <!-- PAGE 7 : ADMIN -->
 <div id="page-admin" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="showPage('login')">← Quitter l'admin</button>
+    <button class="back-btn" onclick="goToLobby()">← Retour au lobby</button>
     <div class="game-topbar-title">🔐 Panneau Admin</div>
     <div></div>
   </div>
-  <div class="game-content" style="justify-content:flex-start;padding-top:2rem;">
+  <div class="game-content" style="justify-content:flex-start;padding-top:2rem;max-width:860px;">
     <div id="admin-list" class="admin-list">
       <div class="lb-loading">Chargement des joueurs...</div>
     </div>
@@ -258,16 +261,15 @@
     <div class="admin-modal-title">⚙️ Gérer le compte</div>
     <div id="admin-modal-username" class="admin-modal-user"></div>
     <div id="admin-modal-balance" class="admin-modal-bal"></div>
-    <div class="admin-modal-row">
-      <input type="number" id="admin-amount" class="bet-input" placeholder="Montant VLX" min="1" style="width:100%"/>
-    </div>
+    <label class="bet-label" style="margin-top:.5rem">Montant VLX</label>
+    <input type="number" id="admin-amount" class="bet-input" placeholder="Ex: 500" min="1" style="width:100%"/>
     <div class="admin-modal-btns">
       <button class="btn-admin-add" onclick="adminAdd()">➕ Ajouter</button>
       <button class="btn-admin-remove" onclick="adminRemove()">➖ Retirer</button>
     </div>
     <div class="admin-modal-btns">
       <button class="btn-admin-ban" onclick="adminBan()">🚫 Bannir / Débannir</button>
-      <button class="btn-admin-delete" onclick="adminDelete()">🗑️ Supprimer</button>
+      <button class="btn-admin-delete" onclick="adminDelete()">🗑️ Supprimer compte</button>
     </div>
     <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
   </div>
