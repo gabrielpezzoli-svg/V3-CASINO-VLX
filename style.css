@@ -225,3 +225,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 ::-webkit-scrollbar{width:6px;}
 ::-webkit-scrollbar-track{background:var(--bg2);}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* ======= BONUS CARD ======= */
+.bonus-card { border-color: rgba(212,160,23,.3); }
+.bonus-card::after { background: linear-gradient(90deg, #f0c040, transparent); }
+.bonus-card.ready { animation: bonusPulse 2s ease-in-out infinite; cursor:pointer; }
+.bonus-card.claimed { opacity:.6; cursor:default; }
+@keyframes bonusPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(212,160,23,0); }
+  50%      { box-shadow: 0 0 20px 4px rgba(212,160,23,.35); }
+}
+.bonus-timer {
+  font-family: var(--ff-mono);
+  font-size: 1.2rem;
+  color: var(--gold2);
+  margin-top: .3rem;
+  letter-spacing: .05em;
+}
