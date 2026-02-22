@@ -5,471 +5,346 @@ import {
   collection, query, orderBy, limit, onSnapshot
 } from "./firebase-config.js";
 
-let currentUser  = null;
-let userData     = null;
-let unsubLB      = null;
-let currentPage  = "login";
+let currentUser = null, userData = null, unsubLB = null, currentPage = "login";
 
-// ── TOAST ────────────────────────────────────────────────────
-function toast(msg, type = "") {
+// ── TOAST ─────────────────────────────────────────────────────
+function toast(msg, type="") {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.className   = "toast show " + type;
-  clearTimeout(t._t);
-  t._t = setTimeout(() => { t.className = "toast"; }, 3000);
+  t.textContent = msg; t.className = "toast show " + type;
+  clearTimeout(t._t); t._t = setTimeout(() => t.className="toast", 3000);
 }
 
-// ── NAVIGATION ───────────────────────────────────────────────
+// ── NAVIGATION ────────────────────────────────────────────────
 function showPage(name) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById("page-" + name).classList.add("active");
-  currentPage = name;
-  updateAllBalances();
+  document.getElementById("page-"+name).classList.add("active");
+  currentPage = name; updateAllBalances();
 }
 window.goToGame = function(game) {
-  if (game === "leaderboard") renderLeaderboard();
-  if (game === "roulette") initRouletteStrip();
+  if (game==="leaderboard") renderLeaderboard();
   showPage(game);
 };
 window.goToLobby = function() { showPage("lobby"); };
 
 function updateAllBalances() {
   const bal = (userData?.balance ?? 0).toLocaleString("fr-FR") + " VLX";
-  ["roulette","mines","coinflip"].forEach(id => {
-    const el = document.getElementById(id + "-balance");
+  ["dice","mines","coinflip"].forEach(id => {
+    const el = document.getElementById(id+"-balance");
     if (el) el.textContent = bal;
   });
   const bd = document.getElementById("balance-display");
   if (bd) bd.textContent = bal;
 }
 
-// ── AUTH ─────────────────────────────────────────────────────
+// ── AUTH ──────────────────────────────────────────────────────
 document.getElementById("google-login-btn").onclick = async () => {
   try { await signInWithPopup(auth, googleProvider); }
-  catch (e) { document.getElementById("login-error").textContent = "Erreur : " + e.message; }
+  catch(e) { document.getElementById("login-error").textContent = "Erreur : "+e.message; }
 };
 document.getElementById("logout-btn").onclick = () => signOut(auth);
 
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, async user => {
   if (user) {
     currentUser = user;
     await loadOrCreateUser(user);
-    document.getElementById("user-avatar").src = user.photoURL || "";
-    document.getElementById("lobby-username").textContent = user.displayName || "";
+    document.getElementById("user-avatar").src = user.photoURL||"";
+    document.getElementById("lobby-username").textContent = user.displayName||"";
     startLeaderboard();
     showPage("lobby");
   } else {
     currentUser = null; userData = null;
-    if (unsubLB) { unsubLB(); unsubLB = null; }
+    if (unsubLB) { unsubLB(); unsubLB=null; }
     showPage("login");
   }
 });
 
 async function loadOrCreateUser(user) {
-  const ref  = doc(db, "users", user.uid);
+  const ref = doc(db,"users",user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
-    const newUser = { uid:user.uid, name:user.displayName, avatar:user.photoURL, balance:1500, gamesPlayed:0, createdAt:Date.now() };
-    await setDoc(ref, newUser);
-    userData = newUser;
-  } else { userData = snap.data(); }
+    const u = {uid:user.uid,name:user.displayName,avatar:user.photoURL,balance:1500,gamesPlayed:0,createdAt:Date.now()};
+    await setDoc(ref,u); userData=u;
+  } else userData=snap.data();
 }
-
 async function saveUserData() {
   if (!currentUser) return;
-  await updateDoc(doc(db, "users", currentUser.uid), { balance:userData.balance, gamesPlayed:userData.gamesPlayed });
+  await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance,gamesPlayed:userData.gamesPlayed});
   updateAllBalances();
 }
 
-// ── BET HELPERS ──────────────────────────────────────────────
-window.quickBet = (id, mult) => {
-  const el = document.getElementById(id);
-  el.value = Math.max(10, Math.round(Number(el.value) * mult));
+// ── BET HELPERS ───────────────────────────────────────────────
+window.quickBet = (id,mult) => {
+  const el=document.getElementById(id); el.value=Math.max(10,Math.round(Number(el.value)*mult));
 };
-window.setMax = (id) => { document.getElementById(id).value = userData?.balance ?? 0; };
+window.setMax = id => { document.getElementById(id).value=userData?.balance??0; };
 function parseBet(id) {
-  const val = Number(document.getElementById(id).value);
-  if (!Number.isFinite(val) || val < 10) { toast("Mise minimum : 10 VLX", "lose"); return null; }
-  if (val > userData.balance)             { toast("Solde insuffisant !", "lose"); return null; }
-  return Math.floor(val);
+  const v=Number(document.getElementById(id).value);
+  if(!Number.isFinite(v)||v<10){toast("Mise minimum : 10 VLX","lose");return null;}
+  if(v>userData.balance){toast("Solde insuffisant !","lose");return null;}
+  return Math.floor(v);
 }
 
-// ════════════════════════════════════════════════════════════
-//   ROULETTE — CANVAS INFINI
-// ════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
+//   DICE
+// ═════════════════════════════════════════════════════════════
+let diceTarget    = 50;
+let diceDirection = "under"; // "under" = résultat < cible | "over" = résultat > cible
+let diceRolling   = false;
 
-const SEGS = [
-  { mult:0,   label:"×0",   color:"#7a0000", text:"#ff6b6b" },
-  { mult:0.5, label:"×0.5", color:"#0d3566", text:"#74b9ff" },
-  { mult:1,   label:"×1",   color:"#2d2d2d", text:"#dfe6e9" },
-  { mult:2,   label:"×2",   color:"#1a5c1a", text:"#55efc4" },
-  { mult:5,   label:"×5",   color:"#7a4400", text:"#fdcb6e" },
-];
-
-const CELL_W = 100;  // largeur case px
-const CELL_H = 100;  // hauteur case px
-
-let canvas, ctx;
-let rouletteSpinning = false;
-let animOffset = 0;   // position actuelle (px, défile vers gauche)
-let animId     = null;
-
-function initRouletteStrip() {
-  canvas = document.getElementById("roulette-canvas");
-  if (!canvas) return;
-  ctx = canvas.getContext("2d");
-  canvas.width  = canvas.offsetWidth;
-  canvas.height = CELL_H;
-  drawStrip(animOffset);
+// Probabilité de gagner
+function diceWinChance() {
+  if (diceDirection === "under") return (diceTarget - 1) / 100;  // 1..target-1 gagne
+  else                           return (100 - diceTarget) / 100; // target+1..100 gagne
 }
 
-// Dessine la bande à une position donnée
-function drawStrip(offset) {
-  if (!canvas || !ctx) return;
-  const W = canvas.width;
-  const H = canvas.height;
-  const patternW = SEGS.length * CELL_W;
+// Multiplicateur avec avantage maison de 2%
+function diceMultiplier() {
+  const chance = diceWinChance();
+  if (chance <= 0) return 0;
+  return Math.round((0.98 / chance) * 100) / 100;
+}
 
-  ctx.clearRect(0, 0, W, H);
+function updateDiceUI() {
+  const target = diceTarget;
+  const dir    = diceDirection;
+  const mult   = diceMultiplier();
+  const chance = diceWinChance();
 
-  // Calcul du décalage normalisé (modulo pour boucler)
-  const norm = ((offset % patternW) + patternW) % patternW;
+  document.getElementById("dice-target-display").textContent = target;
+  document.getElementById("dice-mult-display").textContent   = "×" + mult.toFixed(2);
 
-  // On dessine assez de cases pour couvrir tout le canvas + débords
-  const startCell = Math.floor(norm / CELL_W);
-  const startX    = -(norm % CELL_W);
-
-  for (let i = -1; i < Math.ceil(W / CELL_W) + 2; i++) {
-    const segIdx = ((startCell + i) % SEGS.length + SEGS.length) % SEGS.length;
-    const seg    = SEGS[segIdx];
-    const x      = startX + i * CELL_W;
-
-    // Fond
-    ctx.fillStyle = seg.color;
-    ctx.fillRect(x, 0, CELL_W, H);
-
-    // Séparateur
-    ctx.strokeStyle = "rgba(0,0,0,0.5)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, 0, CELL_W, H);
-
-    // Multiplicateur
-    ctx.fillStyle = seg.text;
-    ctx.font      = "bold 24px 'DM Mono', monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(seg.label, x + CELL_W / 2, H / 2);
+  // Barre verte = zone gagnante
+  const bar = document.getElementById("dice-bar-win");
+  if (dir === "under") {
+    // Zone gagnante : gauche → target-1
+    bar.style.left  = "0%";
+    bar.style.width = ((target - 1) / 100 * 100) + "%";
+    bar.style.borderRadius = "22px 0 0 22px";
+  } else {
+    // Zone gagnante : target+1 → droite
+    bar.style.left  = (target / 100 * 100) + "%";
+    bar.style.width = ((100 - target) / 100 * 100) + "%";
+    bar.style.borderRadius = "0 22px 22px 0";
   }
-
-  // Dégradés sur les côtés
-  const fadeW = 100;
-  const gradL = ctx.createLinearGradient(0, 0, fadeW, 0);
-  gradL.addColorStop(0, "#0a0a0f");
-  gradL.addColorStop(1, "transparent");
-  ctx.fillStyle = gradL;
-  ctx.fillRect(0, 0, fadeW, H);
-
-  const gradR = ctx.createLinearGradient(W - fadeW, 0, W, 0);
-  gradR.addColorStop(0, "transparent");
-  gradR.addColorStop(1, "#0a0a0f");
-  ctx.fillStyle = gradR;
-  ctx.fillRect(W - fadeW, 0, fadeW, H);
-
-  // Surlignage central (case active)
-  const cx = W / 2;
-  ctx.strokeStyle = "rgba(212, 160, 23, 0.8)";
-  ctx.lineWidth   = 3;
-  ctx.strokeRect(cx - CELL_W / 2, 2, CELL_W, H - 4);
 }
 
-// Easing ease-out cubique
-function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+window.adjustTarget = function(delta) {
+  diceTarget = Math.max(2, Math.min(98, diceTarget + delta));
+  updateDiceUI();
+};
 
-window.spinRoulette = async function() {
-  if (rouletteSpinning) return;
-  const bet = parseBet("roulette-bet");
+window.setDirection = function(dir) {
+  diceDirection = dir;
+  document.getElementById("dir-under").classList.toggle("active", dir==="under");
+  document.getElementById("dir-over").classList.toggle("active",  dir==="over");
+  updateDiceUI();
+};
+
+window.rollDice = async function() {
+  if (diceRolling) return;
+  const bet = parseBet("dice-bet");
   if (bet === null) return;
 
-  rouletteSpinning = true;
-  document.getElementById("roulette-spin-btn").disabled = true;
-  document.getElementById("roulette-result").textContent = "";
+  const chance = diceWinChance();
+  if (chance <= 0) { toast("Zone impossible !", "lose"); return; }
 
-  // Tirage
-  const winIdx = Math.floor(Math.random() * SEGS.length);
-  const winner = SEGS[winIdx];
+  diceRolling = true;
+  document.getElementById("dice-roll-btn").disabled = true;
 
-  // On veut que la case gagnante soit exactement au centre du canvas
-  // Centre = canvas.width / 2
-  // On calcule la distance à parcourir :
-  //  - tours complets : 5 à 8 fois le pattern
-  //  - + position de la case gagnante centrée
-  const W          = canvas.width;
-  const patternW   = SEGS.length * CELL_W;
-  const extraTurns = (5 + Math.floor(Math.random() * 4)) * patternW;
+  // Tirage 1–100
+  const result = Math.floor(Math.random() * 100) + 1;
 
-  // Position du centre de la case gagnante dans le pattern
-  const winCellCenter = winIdx * CELL_W + CELL_W / 2;
-  // On veut que winCellCenter soit sous W/2 (le pointeur central)
-  // offset final = winCellCenter - W/2 + extraTurns
-  const targetOffset = animOffset + extraTurns + (winCellCenter - (animOffset % patternW + patternW) % patternW);
+  // Animation du marqueur : parcourt la barre en 1s avant de s'arrêter au bon endroit
+  const marker = document.getElementById("dice-bar-marker");
+  marker.style.display = "block";
+  marker.style.transition = "none";
+  marker.style.left = "0%";
 
-  const startOffset = animOffset;
-  const totalDist   = targetOffset - startOffset;
-  const duration    = 3500; // ms
-  const startTime   = performance.now();
+  // Petite pause pour que le reset soit visible
+  await delay(50);
 
-  if (animId) cancelAnimationFrame(animId);
+  // Déplace le marqueur vers la position finale
+  marker.style.transition = "left 0.9s cubic-bezier(.25,.8,.25,1)";
+  marker.style.left = (result / 100 * 100) + "%";
 
-  function animate(now) {
-    const elapsed  = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased    = easeOut(progress);
+  await delay(1000);
 
-    animOffset = startOffset + totalDist * eased;
-    drawStrip(animOffset);
+  // Résultat
+  const won = diceDirection==="under" ? result < diceTarget : result > diceTarget;
+  const mult = diceMultiplier();
+  const gain = won ? Math.round(bet * mult) - bet : -bet;
 
-    if (progress < 1) {
-      animId = requestAnimationFrame(animate);
-    } else {
-      animOffset = targetOffset;
-      drawStrip(animOffset);
-      finishSpin(winner, bet);
-    }
-  }
-
-  animId = requestAnimationFrame(animate);
-};
-
-async function finishSpin(winner, bet) {
-  // Petit rebond
-  const bounce = animOffset - 5;
-  await animateTo(bounce, 100);
-  await animateTo(animOffset + 5, 150);
-
-  const gain = Math.round(bet * winner.mult) - bet;
   userData.balance = Math.max(0, userData.balance + gain);
   userData.gamesPlayed++;
   await saveUserData();
 
-  const resultEl = document.getElementById("roulette-result");
-  if (winner.mult === 0) {
-    resultEl.innerHTML = `<span style="color:var(--red2)">×0 — Perdu ${bet} VLX 💀</span>`;
-    toast(`Perdu ${bet} VLX`, "lose");
-  } else if (winner.mult < 1) {
-    resultEl.innerHTML = `<span style="color:var(--gold)">×0.5 → +${Math.round(bet*0.5)} VLX</span>`;
-    toast(`×0.5 → +${Math.round(bet*0.5)} VLX`, "");
-  } else if (winner.mult === 1) {
-    resultEl.innerHTML = `<span style="color:var(--text)">×1 — Mise remboursée</span>`;
-    toast("Mise remboursée !", "");
+  // Affichage du chiffre tiré
+  const rolledEl = document.getElementById("dice-rolled");
+  rolledEl.textContent = result;
+  rolledEl.className   = "dice-rolled " + (won ? "win" : "lose");
+
+  // Couleur de la barre selon résultat
+  const barWin = document.getElementById("dice-bar-win");
+  barWin.style.background = won
+    ? "linear-gradient(90deg,var(--green),#2ecc71)"
+    : "linear-gradient(90deg,var(--red),var(--red2))";
+  setTimeout(() => {
+    barWin.style.background = "linear-gradient(90deg,var(--green),#2ecc71)";
+  }, 1500);
+
+  if (won) {
+    toast(`Gagné ! +${Math.round(bet*mult)} VLX (×${mult.toFixed(2)}) 🎉`, "win");
   } else {
-    resultEl.innerHTML = `<span style="color:var(--green2)">×${winner.mult} — GAGNÉ +${Math.round(bet*winner.mult)} VLX 🎉</span>`;
-    toast(`×${winner.mult} ! +${Math.round(bet*winner.mult)} VLX 🎉`, "win");
+    toast(`Perdu ${bet} VLX — résultat : ${result}`, "lose");
   }
 
-  rouletteSpinning = false;
-  document.getElementById("roulette-spin-btn").disabled = false;
-}
+  await delay(400);
+  diceRolling = false;
+  document.getElementById("dice-roll-btn").disabled = false;
+};
 
-function animateTo(target, duration) {
-  return new Promise(resolve => {
-    const start     = animOffset;
-    const dist      = target - start;
-    const startTime = performance.now();
-    function step(now) {
-      const t = Math.min((now - startTime) / duration, 1);
-      animOffset = start + dist * t;
-      drawStrip(animOffset);
-      if (t < 1) requestAnimationFrame(step);
-      else resolve();
-    }
-    requestAnimationFrame(step);
-  });
-}
+// Init la barre dès le chargement de la page dice
+window.goToGame = function(game) {
+  if (game==="leaderboard") renderLeaderboard();
+  if (game==="dice") { updateDiceUI(); }
+  showPage(game);
+};
 
-// Redimensionnement
-window.addEventListener("resize", () => {
-  if (currentPage === "roulette") initRouletteStrip();
-});
-
-// ════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 //   MINES
-// ════════════════════════════════════════════════════════════
-const GRID_SIZE  = 25;
-const MINE_COUNT = 5;
-let minesActive  = false;
-let minesBet     = 0;
-let minesGrid    = [];
-let safeRevealed = 0;
+// ═════════════════════════════════════════════════════════════
+const GRID_SIZE=25, MINE_COUNT=5;
+let minesActive=false, minesBet=0, minesGrid=[], safeRevealed=0;
 
 function getMinesMultiplier(safe) {
-  const table = [1,1.18,1.40,1.68,2.05,2.55,3.25,4.25,5.70,8.0,12.0,19.0,33.0,65.0,156.0,500.0,2000.0,10000.0,50000.0,250000.0];
-  return table[Math.min(safe, table.length-1)];
+  const t=[1,1.18,1.40,1.68,2.05,2.55,3.25,4.25,5.70,8.0,12,19,33,65,156,500,2000,10000,50000,250000];
+  return t[Math.min(safe,t.length-1)];
 }
-
 window.startMines = function() {
-  const bet = parseBet("mines-bet");
-  if (bet === null) return;
-  minesBet = bet; safeRevealed = 0; minesActive = true;
-  userData.balance -= bet; updateAllBalances();
-  const pos = Array.from({length:GRID_SIZE},(_,i)=>i);
-  shuffle(pos);
-  minesGrid = Array(GRID_SIZE).fill(false);
-  for (let i=0;i<MINE_COUNT;i++) minesGrid[pos[i]] = true;
+  const bet=parseBet("mines-bet"); if(!bet) return;
+  minesBet=bet; safeRevealed=0; minesActive=true;
+  userData.balance-=bet; updateAllBalances();
+  const pos=Array.from({length:GRID_SIZE},(_,i)=>i); shuffle(pos);
+  minesGrid=Array(GRID_SIZE).fill(false);
+  for(let i=0;i<MINE_COUNT;i++) minesGrid[pos[i]]=true;
   renderMinesGrid(); updateMinesInfo();
-  document.getElementById("mines-start-btn").disabled   = true;
-  document.getElementById("mines-cashout-btn").disabled = true;
-  document.getElementById("mines-bet").disabled         = true;
+  document.getElementById("mines-start-btn").disabled=true;
+  document.getElementById("mines-cashout-btn").disabled=true;
+  document.getElementById("mines-bet").disabled=true;
 };
-
 window.cashoutMines = async function() {
-  if (!minesActive || safeRevealed < 2) return;
-  const mult = getMinesMultiplier(safeRevealed);
-  const win  = Math.round(minesBet * mult);
-  userData.balance += win; userData.gamesPlayed++;
-  minesActive = false;
+  if(!minesActive||safeRevealed<2) return;
+  const mult=getMinesMultiplier(safeRevealed), win=Math.round(minesBet*mult);
+  userData.balance+=win; userData.gamesPlayed++; minesActive=false;
   await saveUserData();
-  toast(`Cashout ! +${win} VLX (×${mult.toFixed(2)}) 💰`, "win");
+  toast(`Cashout ! +${win} VLX (×${mult.toFixed(2)}) 💰`,"win");
   revealAllMines(); resetMinesButtons();
 };
-
 function revealCell(idx) {
-  if (!minesActive) return;
-  const cells = document.querySelectorAll(".mine-cell");
-  const cell  = cells[idx];
-  if (cell.classList.contains("revealed")) return;
+  if(!minesActive) return;
+  const cells=document.querySelectorAll(".mine-cell"), cell=cells[idx];
+  if(cell.classList.contains("revealed")) return;
   cell.classList.add("revealed");
-  if (minesGrid[idx]) {
-    cell.classList.add("mine"); cell.textContent = "💣";
-    minesActive = false; userData.gamesPlayed++;
-    saveUserData();
-    toast(`MINE ! Perdu ${minesBet} VLX 💥`, "lose");
+  if(minesGrid[idx]) {
+    cell.classList.add("mine"); cell.textContent="💣";
+    minesActive=false; userData.gamesPlayed++; saveUserData();
+    toast(`MINE ! Perdu ${minesBet} VLX 💥`,"lose");
     revealAllMines(); resetMinesButtons();
   } else {
-    cell.classList.add("safe"); cell.textContent = "✓";
+    cell.classList.add("safe"); cell.textContent="✓";
     safeRevealed++; updateMinesInfo();
-    if (safeRevealed >= 2) document.getElementById("mines-cashout-btn").disabled = false;
-    if (safeRevealed === GRID_SIZE - MINE_COUNT) {
-      const mult = getMinesMultiplier(safeRevealed);
-      const win  = Math.round(minesBet * mult);
-      userData.balance += win; userData.gamesPlayed++;
-      minesActive = false; saveUserData();
-      toast(`Parfait ! +${win} VLX 🏆`, "win");
-      resetMinesButtons();
+    if(safeRevealed>=2) document.getElementById("mines-cashout-btn").disabled=false;
+    if(safeRevealed===GRID_SIZE-MINE_COUNT) {
+      const mult=getMinesMultiplier(safeRevealed), win=Math.round(minesBet*mult);
+      userData.balance+=win; userData.gamesPlayed++; minesActive=false;
+      saveUserData(); toast(`Parfait ! +${win} VLX 🏆`,"win"); resetMinesButtons();
     }
   }
 }
-
 function updateMinesInfo() {
-  const mult = getMinesMultiplier(safeRevealed);
-  document.getElementById("mines-safe-count").textContent  = safeRevealed;
-  document.getElementById("mines-multiplier").textContent  = "×" + mult.toFixed(2);
-  document.getElementById("mines-bet-display").textContent = minesBet + " VLX";
-  document.getElementById("mines-potential").textContent   = Math.round(minesBet * mult) + " VLX";
+  const mult=getMinesMultiplier(safeRevealed);
+  document.getElementById("mines-safe-count").textContent=safeRevealed;
+  document.getElementById("mines-multiplier").textContent="×"+mult.toFixed(2);
+  document.getElementById("mines-bet-display").textContent=minesBet+" VLX";
+  document.getElementById("mines-potential").textContent=Math.round(minesBet*mult)+" VLX";
 }
-
 function renderMinesGrid() {
-  const grid = document.getElementById("mines-grid");
-  grid.innerHTML = "";
-  for (let i=0;i<GRID_SIZE;i++) {
-    const cell = document.createElement("div");
-    cell.className = "mine-cell"; cell.textContent = "?";
-    cell.onclick = () => revealCell(i);
-    grid.appendChild(cell);
+  const g=document.getElementById("mines-grid"); g.innerHTML="";
+  for(let i=0;i<GRID_SIZE;i++){
+    const c=document.createElement("div"); c.className="mine-cell"; c.textContent="?";
+    c.onclick=()=>revealCell(i); g.appendChild(c);
   }
 }
-
 function revealAllMines() {
-  document.querySelectorAll(".mine-cell").forEach((cell,i) => {
-    if (minesGrid[i] && !cell.classList.contains("revealed")) {
-      cell.classList.add("revealed","mine"); cell.textContent = "💣";
-    }
+  document.querySelectorAll(".mine-cell").forEach((c,i)=>{
+    if(minesGrid[i]&&!c.classList.contains("revealed")){c.classList.add("revealed","mine");c.textContent="💣";}
   });
 }
-
 function resetMinesButtons() {
-  document.getElementById("mines-start-btn").disabled   = false;
-  document.getElementById("mines-cashout-btn").disabled = true;
-  document.getElementById("mines-bet").disabled         = false;
+  document.getElementById("mines-start-btn").disabled=false;
+  document.getElementById("mines-cashout-btn").disabled=true;
+  document.getElementById("mines-bet").disabled=false;
 }
 
-// ════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 //   COINFLIP
-// ════════════════════════════════════════════════════════════
-let chosenSide = null, coinFlipping = false;
-
+// ═════════════════════════════════════════════════════════════
+let chosenSide=null, coinFlipping=false;
 window.chooseSide = function(side) {
-  if (coinFlipping) return;
-  chosenSide = side;
-  document.getElementById("choose-blue").classList.toggle("selected", side==="blue");
-  document.getElementById("choose-red").classList.toggle("selected",  side==="red");
-  document.getElementById("coinflip-btn").disabled = false;
+  if(coinFlipping) return;
+  chosenSide=side;
+  document.getElementById("choose-blue").classList.toggle("selected",side==="blue");
+  document.getElementById("choose-red").classList.toggle("selected",side==="red");
+  document.getElementById("coinflip-btn").disabled=false;
 };
-
 window.flipCoin = async function() {
-  if (!chosenSide || coinFlipping) return;
-  const bet = parseBet("coinflip-bet");
-  if (bet === null) return;
-  coinFlipping = true;
-  document.getElementById("coinflip-btn").disabled = true;
-  document.getElementById("coinflip-result").textContent = "";
-  const result = Math.random() < 0.5 ? "blue" : "red";
-  const coin   = document.getElementById("coin");
-  coin.className = "coin flip-" + result;
+  if(!chosenSide||coinFlipping) return;
+  const bet=parseBet("coinflip-bet"); if(!bet) return;
+  coinFlipping=true; document.getElementById("coinflip-btn").disabled=true;
+  document.getElementById("coinflip-result").textContent="";
+  const result=Math.random()<.5?"blue":"red";
+  const coin=document.getElementById("coin"); coin.className="coin flip-"+result;
   await delay(1400);
-  const won = result === chosenSide;
-  userData.balance = Math.max(0, userData.balance + (won ? bet : -bet));
-  userData.gamesPlayed++;
+  const won=result===chosenSide;
+  userData.balance=Math.max(0,userData.balance+(won?bet:-bet)); userData.gamesPlayed++;
   await saveUserData();
-  const resultEl = document.getElementById("coinflip-result");
-  if (won) {
-    resultEl.innerHTML = `<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`;
-    toast(`Correct ! +${bet} VLX`, "win");
-  } else {
-    resultEl.innerHTML = `<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
-    toast(`Perdu ${bet} VLX`, "lose");
-  }
+  document.getElementById("coinflip-result").innerHTML=won
+    ?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`
+    :`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
+  toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`, won?"win":"lose");
   await delay(900);
-  coin.className = "coin";
-  coinFlipping = false; chosenSide = null;
+  coin.className="coin"; coinFlipping=false; chosenSide=null;
   document.getElementById("choose-blue").classList.remove("selected");
   document.getElementById("choose-red").classList.remove("selected");
-  document.getElementById("coinflip-btn").disabled = true;
+  document.getElementById("coinflip-btn").disabled=true;
 };
 
-// ════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 //   LEADERBOARD
-// ════════════════════════════════════════════════════════════
-let leaderboardData = [];
-
+// ═════════════════════════════════════════════════════════════
+let leaderboardData=[];
 function startLeaderboard() {
-  const q = query(collection(db,"users"), orderBy("balance","desc"), limit(20));
-  unsubLB = onSnapshot(q, snap => {
-    leaderboardData = snap.docs.map(d => d.data());
-    if (currentPage === "leaderboard") renderLeaderboard();
+  const q=query(collection(db,"users"),orderBy("balance","desc"),limit(20));
+  unsubLB=onSnapshot(q,snap=>{
+    leaderboardData=snap.docs.map(d=>d.data());
+    if(currentPage==="leaderboard") renderLeaderboard();
   });
 }
-
 function renderLeaderboard() {
-  const list = document.getElementById("leaderboard-list");
-  if (!leaderboardData.length) { list.innerHTML='<div class="lb-loading">Aucun joueur encore.</div>'; return; }
-  list.innerHTML = "";
-  leaderboardData.forEach((u, i) => {
-    const rank  = i + 1;
-    const isYou = u.uid === currentUser?.uid;
-    const medals = ["🥇","🥈","🥉"];
-    const rankEl = rank<=3 ? `<div class="lb-rank gold-rank">${medals[rank-1]}</div>` : `<div class="lb-rank">#${rank}</div>`;
-    const entry = document.createElement("div");
-    entry.className = "lb-entry" + (rank<=3?" top"+rank:"");
-    entry.innerHTML = `${rankEl}<img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span class="lb-name">${u.name||"Joueur"}${isYou?'<span class="lb-you">VOUS</span>':''}</span><span class="lb-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>`;
-    list.appendChild(entry);
+  const list=document.getElementById("leaderboard-list");
+  if(!leaderboardData.length){list.innerHTML='<div class="lb-loading">Aucun joueur encore.</div>';return;}
+  list.innerHTML="";
+  leaderboardData.forEach((u,i)=>{
+    const rank=i+1, isYou=u.uid===currentUser?.uid;
+    const medals=["🥇","🥈","🥉"];
+    const rankEl=rank<=3?`<div class="lb-rank gold-rank">${medals[rank-1]}</div>`:`<div class="lb-rank">#${rank}</div>`;
+    const e=document.createElement("div");
+    e.className="lb-entry"+(rank<=3?" top"+rank:"");
+    e.innerHTML=`${rankEl}<img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span class="lb-name">${u.name||"Joueur"}${isYou?'<span class="lb-you">VOUS</span>':''}</span><span class="lb-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>`;
+    list.appendChild(e);
   });
 }
 
-// ── UTILS ────────────────────────────────────────────────────
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
-function shuffle(arr) {
-  for (let i=arr.length-1;i>0;i--) {
-    const j=Math.floor(Math.random()*(i+1));
-    [arr[i],arr[j]]=[arr[j],arr[i]];
-  }
-}
+// ── UTILS ─────────────────────────────────────────────────────
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}}
