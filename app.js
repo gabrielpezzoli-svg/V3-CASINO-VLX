@@ -353,7 +353,7 @@ lobbyObserver.observe(document.getElementById("page-lobby"), { attributes: true,
 //   ADMIN
 // ═══════════════════════════════════════════════════════════════
 const ADMIN_ID = "GABRIEL";
-const ADMIN_PW = "GABY2023";
+const ADMIN_PW = "Gaby2023";
 let adminSelectedUser = null;
 let allUsersData = [];
 
