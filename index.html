@@ -83,24 +83,6 @@
         <div id="bonus-label" class="gc-play">RÉCLAMER →</div>
         <div id="bonus-timer" class="bonus-timer" style="display:none"></div>
       </div>
-      <!-- CARTE ADMIN -->
-      <div class="game-card admin-card" id="admin-card" onclick="toggleAdminCard()">
-        <div class="gc-icon">🔐</div>
-        <div class="gc-name">Admin</div>
-        <div class="gc-desc">Accès réservé · Gestion des comptes</div>
-        <div class="gc-play" id="admin-card-label">ACCÉDER →</div>
-      </div>
-    </div>
-
-    <!-- PANNEAU LOGIN ADMIN (caché par défaut) -->
-    <div id="admin-login-panel" class="admin-login-panel" style="display:none">
-      <div class="alp-title">🔐 Connexion Administrateur</div>
-      <div class="alp-fields">
-        <input id="admin-id-input" class="alp-input" placeholder="Identifiant" autocomplete="off"/>
-        <input id="admin-pw-input" class="alp-input" type="password" placeholder="Mot de passe"/>
-        <button class="alp-btn" onclick="tryAdminLogin()">Connexion</button>
-      </div>
-      <div id="admin-login-error" class="alp-error"></div>
     </div>
   </div>
 </div>
@@ -238,40 +220,6 @@
     <div id="leaderboard-list" class="leaderboard-list">
       <div class="lb-loading">Chargement...</div>
     </div>
-  </div>
-</div>
-
-<!-- PAGE 7 : ADMIN -->
-<div id="page-admin" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour au lobby</button>
-    <div class="game-topbar-title">🔐 Panneau Admin</div>
-    <div></div>
-  </div>
-  <div class="game-content" style="justify-content:flex-start;padding-top:2rem;max-width:860px;">
-    <div id="admin-list" class="admin-list">
-      <div class="lb-loading">Chargement des joueurs...</div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL ADMIN -->
-<div id="admin-modal" class="admin-modal-overlay" style="display:none">
-  <div class="admin-modal">
-    <div class="admin-modal-title">⚙️ Gérer le compte</div>
-    <div id="admin-modal-username" class="admin-modal-user"></div>
-    <div id="admin-modal-balance" class="admin-modal-bal"></div>
-    <label class="bet-label" style="margin-top:.5rem">Montant VLX</label>
-    <input type="number" id="admin-amount" class="bet-input" placeholder="Ex: 500" min="1" style="width:100%"/>
-    <div class="admin-modal-btns">
-      <button class="btn-admin-add" onclick="adminAdd()">➕ Ajouter</button>
-      <button class="btn-admin-remove" onclick="adminRemove()">➖ Retirer</button>
-    </div>
-    <div class="admin-modal-btns">
-      <button class="btn-admin-ban" onclick="adminBan()">🚫 Bannir / Débannir</button>
-      <button class="btn-admin-delete" onclick="adminDelete()">🗑️ Supprimer compte</button>
-    </div>
-    <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
   </div>
 </div>
 
