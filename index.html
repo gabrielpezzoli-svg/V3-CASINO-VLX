@@ -10,33 +10,24 @@
 </head>
 <body>
 
-<!-- PAGE 1 : LOGIN -->
+<!-- PAGE LOGIN -->
 <div id="page-login" class="page active">
   <div class="login-bg">
-    <div class="bg-glow"></div>
-    <div class="bg-glow glow2"></div>
+    <div class="bg-glow"></div><div class="bg-glow glow2"></div>
     <div class="card-suits">♠ ♥ ♦ ♣</div>
   </div>
   <div class="login-box">
-    <div class="logo">
-      <span class="logo-v">V</span><span class="logo-lx">LX</span>
-      <div class="logo-sub">CASINO</div>
-    </div>
+    <div class="logo"><span class="logo-v">V</span><span class="logo-lx">LX</span><div class="logo-sub">CASINO</div></div>
     <p class="login-desc">Commencez avec <strong>1 500 VLX</strong>.<br>Montez au sommet du classement.</p>
     <button id="google-login-btn" class="btn-google">
-      <svg width="20" height="20" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.7-6.7C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.6 2.6 13.7l7.8 6C12.4 13.3 17.8 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/>
-        <path fill="#FBBC05" d="M10.4 28.3A14.6 14.6 0 0 1 9.5 24c0-1.5.3-3 .9-4.3l-7.8-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.4z"/>
-        <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.3-7.7 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.8 6A23.9 23.9 0 0 0 24 48z"/>
-      </svg>
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.7-6.7C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.6 2.6 13.7l7.8 6C12.4 13.3 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/><path fill="#FBBC05" d="M10.4 28.3A14.6 14.6 0 0 1 9.5 24c0-1.5.3-3 .9-4.3l-7.8-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.7l7.8-6.4z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.3-7.7 2.3-6.2 0-11.5-4.2-13.4-9.8l-7.8 6A23.9 23.9 0 0 0 24 48z"/></svg>
       Connexion avec Google
     </button>
     <div id="login-error" class="login-error"></div>
   </div>
 </div>
 
-<!-- PAGE 2 : LOBBY -->
+<!-- PAGE LOBBY -->
 <div id="page-lobby" class="page">
   <div class="lobby-header">
     <div class="lobby-logo">VLX <span>CASINO</span></div>
@@ -46,6 +37,21 @@
     </div>
   </div>
   <div class="lobby-body">
+
+    <!-- BARRE SOCIALE -->
+    <div class="social-bar">
+      <button class="social-btn" onclick="goToPage('messagerie')">
+        <span class="social-btn-icon">💬</span>
+        <span class="social-btn-label">Messagerie</span>
+        <span id="friend-req-badge" class="social-badge" style="display:none">0</span>
+      </button>
+      <button class="social-btn" onclick="goToPage('amis')">
+        <span class="social-btn-icon">👥</span>
+        <span class="social-btn-label">Amis</span>
+        <span id="game-req-badge" class="social-badge" style="display:none">0</span>
+      </button>
+    </div>
+
     <div class="lobby-balance-card">
       <div class="lbc-label">Votre solde</div>
       <div id="balance-display" class="lbc-amount">0 VLX</div>
@@ -78,16 +84,22 @@
       </div>
       <div class="game-card bonus-card" id="bonus-card" onclick="claimBonus()">
         <div class="gc-icon">🎁</div>
-        <div class="gc-name">Bonus Horaire</div>
-        <div class="gc-desc">+50 VLX gratuits toutes les heures</div>
+        <div class="gc-name">Bonus</div>
+        <div class="gc-desc">+50 VLX gratuits toutes les 5 minutes</div>
         <div id="bonus-label" class="gc-play">RÉCLAMER →</div>
         <div id="bonus-timer" class="bonus-timer" style="display:none"></div>
+      </div>
+      <div class="game-card tombola-card" onclick="goToGame('tombola')">
+        <div class="gc-icon">🎟️</div>
+        <div class="gc-name">Tombola</div>
+        <div class="gc-desc">50 VLX / ticket · Tirage toutes les 24h</div>
+        <div class="gc-play">PARTICIPER →</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- PAGE 3 : DICE -->
+<!-- PAGE DICE -->
 <div id="page-dice" class="page game-page">
   <div class="game-topbar">
     <button class="back-btn" onclick="goToLobby()">← Retour</button>
@@ -100,9 +112,7 @@
         <div id="dice-bar-win" class="dice-bar-win"></div>
         <div id="dice-bar-marker" class="dice-bar-marker" style="display:none"></div>
       </div>
-      <div class="dice-bar-labels">
-        <span>1</span><span>25</span><span>50</span><span>75</span><span>100</span>
-      </div>
+      <div class="dice-bar-labels"><span>1</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
     </div>
     <div class="dice-result-row">
       <div id="dice-rolled" class="dice-rolled">—</div>
@@ -136,8 +146,8 @@
       <div class="bet-row">
         <input type="number" id="dice-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('dice-bet', 0.5)">½</button>
-          <button onclick="quickBet('dice-bet', 2)">×2</button>
+          <button onclick="quickBet('dice-bet',0.5)">½</button>
+          <button onclick="quickBet('dice-bet',2)">×2</button>
           <button onclick="setMax('dice-bet')">MAX</button>
         </div>
       </div>
@@ -146,7 +156,7 @@
   </div>
 </div>
 
-<!-- PAGE 4 : MINES -->
+<!-- PAGE MINES -->
 <div id="page-mines" class="page game-page">
   <div class="game-topbar">
     <button class="back-btn" onclick="goToLobby()">← Retour</button>
@@ -165,8 +175,8 @@
       <div class="bet-row">
         <input type="number" id="mines-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('mines-bet', 0.5)">½</button>
-          <button onclick="quickBet('mines-bet', 2)">×2</button>
+          <button onclick="quickBet('mines-bet',0.5)">½</button>
+          <button onclick="quickBet('mines-bet',2)">×2</button>
           <button onclick="setMax('mines-bet')">MAX</button>
         </div>
       </div>
@@ -177,7 +187,7 @@
   </div>
 </div>
 
-<!-- PAGE 5 : COINFLIP -->
+<!-- PAGE COINFLIP -->
 <div id="page-coinflip" class="page game-page">
   <div class="game-topbar">
     <button class="back-btn" onclick="goToLobby()">← Retour</button>
@@ -199,8 +209,8 @@
       <div class="bet-row">
         <input type="number" id="coinflip-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('coinflip-bet', 0.5)">½</button>
-          <button onclick="quickBet('coinflip-bet', 2)">×2</button>
+          <button onclick="quickBet('coinflip-bet',0.5)">½</button>
+          <button onclick="quickBet('coinflip-bet',2)">×2</button>
           <button onclick="setMax('coinflip-bet')">MAX</button>
         </div>
       </div>
@@ -209,7 +219,7 @@
   </div>
 </div>
 
-<!-- PAGE 6 : LEADERBOARD -->
+<!-- PAGE LEADERBOARD -->
 <div id="page-leaderboard" class="page game-page">
   <div class="game-topbar">
     <button class="back-btn" onclick="goToLobby()">← Retour</button>
@@ -219,6 +229,120 @@
   <div class="game-content">
     <div id="leaderboard-list" class="leaderboard-list">
       <div class="lb-loading">Chargement...</div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE TOMBOLA -->
+<div id="page-tombola" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎟️ Tombola</div>
+    <div id="tombola-balance" class="topbar-balance">0 VLX</div>
+  </div>
+  <div class="game-content">
+    <div class="tombola-box">
+      <div class="tombola-pot-label">Cagnotte actuelle</div>
+      <div id="tombola-pot" class="tombola-pot">0 VLX</div>
+      <div class="tombola-timer-label">Prochain tirage dans</div>
+      <div id="tombola-timer" class="tombola-timer">--:--:--</div>
+      <div id="tombola-my-tickets" class="tombola-my-tickets">Vous avez <strong>0</strong> ticket(s)</div>
+      <div class="tombola-buy-row">
+        <input type="number" id="tombola-qty" class="bet-input" value="1" min="1" max="100" style="width:100px;text-align:center"/>
+        <span class="tombola-cost-label">× 50 VLX = <span id="tombola-total-cost">50</span> VLX</span>
+      </div>
+      <button class="btn-play" onclick="buyTombolaTickets()">🎟️ ACHETER DES TICKETS</button>
+      <div id="tombola-participants" class="tombola-participants"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE MESSAGERIE -->
+<div id="page-messagerie" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">💬 Messagerie</div>
+    <div></div>
+  </div>
+  <div class="game-content" style="justify-content:flex-start;padding-top:1.5rem;">
+    <div class="msg-section-title">Demandes d'amis reçues</div>
+    <div id="friend-requests-list" class="friend-list">
+      <div class="lb-loading">Aucune demande.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE AMIS -->
+<div id="page-amis" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">👥 Amis</div>
+    <div></div>
+  </div>
+  <div class="game-content" style="justify-content:flex-start;padding-top:1.5rem;">
+    <div class="msg-section-title">Mes amis</div>
+    <div id="friends-list" class="friend-list">
+      <div class="lb-loading">Aucun ami pour l'instant.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE MORPION -->
+<div id="page-morpion" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="quitMorpion()">← Quitter</button>
+    <div class="game-topbar-title">❌⭕ Morpion</div>
+    <div id="morpion-balance" class="topbar-balance">0 VLX</div>
+  </div>
+  <div class="game-content">
+    <div id="morpion-status" class="morpion-status">En attente...</div>
+    <div id="morpion-scores" class="morpion-scores" style="display:none">
+      <span id="morpion-score-me">0</span>
+      <span class="morpion-score-sep">—</span>
+      <span id="morpion-score-opp">0</span>
+    </div>
+    <div id="morpion-board" class="morpion-board">
+      <div class="morpion-cell" onclick="playMorpion(0)"></div>
+      <div class="morpion-cell" onclick="playMorpion(1)"></div>
+      <div class="morpion-cell" onclick="playMorpion(2)"></div>
+      <div class="morpion-cell" onclick="playMorpion(3)"></div>
+      <div class="morpion-cell" onclick="playMorpion(4)"></div>
+      <div class="morpion-cell" onclick="playMorpion(5)"></div>
+      <div class="morpion-cell" onclick="playMorpion(6)"></div>
+      <div class="morpion-cell" onclick="playMorpion(7)"></div>
+      <div class="morpion-cell" onclick="playMorpion(8)"></div>
+    </div>
+    <div id="morpion-info" class="morpion-info"></div>
+  </div>
+</div>
+
+<!-- NOTIF DEMANDE DE JEU -->
+<div id="game-invite-notif" class="game-invite-notif" style="display:none">
+  <div class="gin-content">
+    <div id="gin-text" class="gin-text"></div>
+    <div class="gin-btns">
+      <button class="gin-accept" onclick="acceptGameInvite()">✅ Accepter</button>
+      <button class="gin-refuse" onclick="refuseGameInvite()">❌ Refuser</button>
+    </div>
+    <div id="gin-timer-bar" class="gin-timer-bar"><div id="gin-timer-fill" class="gin-timer-fill"></div></div>
+  </div>
+</div>
+
+<!-- MODAL ENVOYER DEMANDE DE JEU -->
+<div id="game-invite-modal" class="admin-modal-overlay" style="display:none">
+  <div class="admin-modal">
+    <div class="admin-modal-title">🎮 Défi Morpion</div>
+    <div id="game-invite-target-name" class="admin-modal-user"></div>
+    <label class="bet-label" style="margin-top:.5rem">Manches</label>
+    <div class="morpion-manches-btns">
+      <button id="btn-3m" class="manche-btn active" onclick="selectManches(3)">3 manches</button>
+      <button id="btn-5m" class="manche-btn" onclick="selectManches(5)">5 manches</button>
+    </div>
+    <label class="bet-label" style="margin-top:.5rem">Mise VLX (chacun)</label>
+    <input type="number" id="game-invite-bet" class="bet-input" value="100" min="10" style="width:100%"/>
+    <div class="admin-modal-btns" style="margin-top:.5rem">
+      <button class="btn-admin-add" onclick="sendGameInvite()">🎮 Envoyer le défi</button>
+      <button class="btn-admin-close" onclick="closeGameInviteModal()">Annuler</button>
     </div>
   </div>
 </div>
