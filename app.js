@@ -324,41 +324,71 @@ window.spinRoulette = async function() {
   document.getElementById("roulette-spin-btn").disabled = true;
   document.getElementById("roulette-result-box").style.visibility = "hidden";
 
+  // Tirage du numéro gagnant
   const result      = WHEEL_ORDER[Math.floor(Math.random() * SLOT_COUNT)];
   const resultColor = rouletteColor(result);
   const winIdx      = WHEEL_ORDER.indexOf(result);
-  const winAngle    = winIdx * SLOT_ANGLE;
-  const POINTER     = -Math.PI / 2;
-  const turns       = 8 + Math.random() * 4;
-  const targetWheelAngle = POINTER - winAngle + turns * 2 * Math.PI;
+
+  // L'aiguille est fixe à -PI/2 (haut du canvas).
+  // On veut que la case gagnante arrive sous l'aiguille.
+  // La case winIdx est à l'angle (winIdx * SLOT_ANGLE) dans le repère de la roue.
+  // Pour qu'elle soit sous l'aiguille (-PI/2), la roue doit tourner de :
+  //   newWheelAngle = -PI/2 - winIdx * SLOT_ANGLE   (mod 2PI)
+  // On ajoute des tours complets pour l'animation.
+  const POINTER  = -Math.PI / 2;
+  const turns    = 6 + Math.floor(Math.random() * 4); // 6-9 tours entiers
+  const targetWheelAngle = rouletteAngle
+    - ((rouletteAngle - POINTER + winIdx * SLOT_ANGLE) % (2 * Math.PI))
+    + turns * 2 * Math.PI;
 
   const startWheelAngle = rouletteAngle;
   const totalDist       = targetWheelAngle - startWheelAngle;
-  const startBallAngle  = ballAngle;
-  const ballSpins       = -(turns * 1.7);
-  const duration        = 5200;
-  const startTime       = performance.now();
+
+  // La bille tourne en sens inverse à ~1.5x la vitesse de la roue,
+  // puis tombe dans la case gagnante (angle = POINTER dans le repère fixe).
+  const startBallAngle = ballAngle;
+  const peakBallAngle  = startBallAngle - turns * 1.5 * 2 * Math.PI; // sens inverse
+  // Angle final de la bille = position de la case gagnante dans le repère fixe = POINTER
+  const finalBallAngle = POINTER;
+
+  const duration  = 5000;
+  const startTime = performance.now();
 
   function animate(now) {
     const elapsed  = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
     const eased    = easeOutRoulette(progress);
-    rouletteAngle  = startWheelAngle + totalDist * eased;
-    if (progress < 0.72) {
-      const p = progress / 0.72;
+
+    // Rotation de la roue
+    rouletteAngle = startWheelAngle + totalDist * eased;
+
+    // Phase 1 (0 → 0.75) : bille tourne vite à l'extérieur
+    if (progress < 0.75) {
+      const p = progress / 0.75;
+      const ep = easeOutRoulette(p);
       ballTrack = 0.88;
-      ballAngle = startBallAngle + ballSpins * 2 * Math.PI * easeOutRoulette(p);
+      ballAngle = startBallAngle + (peakBallAngle - startBallAngle) * ep;
     } else {
-      const p = (progress - 0.72) / 0.28;
-      ballTrack = 0.88 - p * 0.24;
-      const peakBall = startBallAngle + ballSpins * 2 * Math.PI;
-      ballAngle = peakBall + (POINTER - ((peakBall % (2*Math.PI)) + (POINTER - peakBall % (2*Math.PI)))) * easeOutRoulette(p);
-      ballAngle = startBallAngle + ballSpins * 2 * Math.PI + (POINTER - (startBallAngle + ballSpins * 2 * Math.PI) % (2*Math.PI)) * easeOutRoulette(p);
+      // Phase 2 (0.75 → 1) : bille ralentit et tombe sur la case gagnante
+      const p  = (progress - 0.75) / 0.25;
+      const ep = easeOutRoulette(p);
+      // position angulaire de la bille au début de phase 2
+      const ballAtPhase2 = startBallAngle + (peakBallAngle - startBallAngle);
+      // on l'amène progressivement vers finalBallAngle
+      ballAngle = ballAtPhase2 + (finalBallAngle - ballAtPhase2) * ep;
+      // track : tombe de 0.88 vers 0.65 (dans la case)
+      ballTrack = 0.88 - 0.23 * ep;
     }
+
     drawRoulette(rouletteAngle);
-    if (progress < 1) requestAnimationFrame(animate);
-    else {
-      ballTrack = 0.66; ballAngle = POINTER;
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      // Position finale exacte
+      rouletteAngle = targetWheelAngle;
+      ballAngle     = finalBallAngle;
+      ballTrack     = 0.65;
       drawRoulette(rouletteAngle);
       endSpinRoulette(result, resultColor, bet);
     }
