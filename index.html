@@ -37,8 +37,6 @@
     </div>
   </div>
   <div class="lobby-body">
-
-    <!-- BARRE SOCIALE -->
     <div class="social-bar">
       <button class="social-btn" onclick="goToPage('messagerie')">
         <span class="social-btn-icon">💬</span>
@@ -51,13 +49,18 @@
         <span id="game-req-badge" class="social-badge" style="display:none">0</span>
       </button>
     </div>
-
     <div class="lobby-balance-card">
       <div class="lbc-label">Votre solde</div>
       <div id="balance-display" class="lbc-amount">0 VLX</div>
       <div id="lobby-username" class="lbc-name"></div>
     </div>
     <div class="lobby-games-grid">
+      <div class="game-card" onclick="goToGame('roulette')">
+        <div class="gc-icon">🎡</div>
+        <div class="gc-name">Roulette</div>
+        <div class="gc-desc">Rouge ×2 · Noir ×2 · Vert ×20</div>
+        <div class="gc-play">JOUER →</div>
+      </div>
       <div class="game-card" onclick="goToGame('dice')">
         <div class="gc-icon">🎲</div>
         <div class="gc-name">Dice</div>
@@ -96,6 +99,47 @@
         <div class="gc-play">PARTICIPER →</div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- PAGE ROULETTE -->
+<div id="page-roulette" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎡 Roulette</div>
+    <div id="roulette-balance" class="topbar-balance">0 VLX</div>
+  </div>
+  <div class="game-content roulette-content">
+
+    <div class="roulette-scene">
+      <div class="roulette-pin">▼</div>
+      <canvas id="roulette-canvas" width="340" height="340"></canvas>
+    </div>
+
+    <div id="roulette-result-box" class="roulette-result-box" style="visibility:hidden">
+      <span id="roulette-result-num" class="rr-num">0</span>
+      <span id="roulette-result-label" class="rr-label">—</span>
+    </div>
+
+    <div class="roulette-bets-row">
+      <button id="rb-red"   class="roulette-bet-btn rb-red"   onclick="selectRouletteColor('red')">🔴 Rouge <span class="rb-odds">×2</span></button>
+      <button id="rb-green" class="roulette-bet-btn rb-green" onclick="selectRouletteColor('green')">🟢 Zéro <span class="rb-odds">×20</span></button>
+      <button id="rb-black" class="roulette-bet-btn rb-black" onclick="selectRouletteColor('black')">⚫ Noir <span class="rb-odds">×2</span></button>
+    </div>
+
+    <div class="bet-panel">
+      <label class="bet-label">Mise (VLX)</label>
+      <div class="bet-row">
+        <input type="number" id="roulette-bet" class="bet-input" value="100" min="10"/>
+        <div class="quick-bets">
+          <button onclick="quickBet('roulette-bet',0.5)">½</button>
+          <button onclick="quickBet('roulette-bet',2)">×2</button>
+          <button onclick="setMax('roulette-bet')">MAX</button>
+        </div>
+      </div>
+      <button id="roulette-spin-btn" class="btn-play" onclick="spinRoulette()" disabled>CHOISIR UNE COULEUR D'ABORD</button>
+    </div>
+
   </div>
 </div>
 
