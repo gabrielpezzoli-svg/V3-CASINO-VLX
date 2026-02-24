@@ -257,3 +257,54 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 ::-webkit-scrollbar{width:6px;}
 ::-webkit-scrollbar-track{background:var(--bg2);}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* ══ ROULETTE ══════════════════════════════════════════════════ */
+.roulette-content { gap:1.5rem !important; padding-top:1.5rem !important; }
+
+.roulette-scene {
+  position:relative; display:flex; flex-direction:column; align-items:center;
+}
+.roulette-pin {
+  font-size:2.2rem; color:#d4a017; line-height:1; margin-bottom:-12px; z-index:2;
+  text-shadow:0 0 20px rgba(212,160,23,1), 0 2px 6px rgba(0,0,0,.9);
+  filter:drop-shadow(0 3px 8px rgba(0,0,0,.9));
+}
+#roulette-canvas {
+  border-radius:50%;
+  box-shadow:0 0 50px rgba(212,160,23,.35), 0 15px 70px rgba(0,0,0,.9);
+  width:min(340px,86vw); height:min(340px,86vw); display:block;
+}
+
+/* Résultat */
+.roulette-result-box {
+  display:flex; align-items:center; gap:1.2rem;
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:8px; padding:.9rem 1.8rem;
+}
+.rr-num {
+  font-family:'DM Mono',monospace; font-size:2.8rem; font-weight:700;
+  line-height:1; min-width:2ch; text-align:center;
+}
+.rr-label {
+  font-family:'Playfair Display',serif; font-size:1.1rem; color:var(--text2);
+}
+
+/* Boutons de pari */
+.roulette-bets-row {
+  display:flex; gap:.8rem; flex-wrap:wrap; justify-content:center;
+}
+.roulette-bet-btn {
+  flex:1; min-width:100px; max-width:155px;
+  padding:.9rem .8rem; border:2px solid transparent; border-radius:8px;
+  font-family:'Rajdhani',sans-serif; font-size:1rem; font-weight:700;
+  cursor:pointer; transition:all .2s;
+  display:flex; flex-direction:column; align-items:center; gap:.2rem;
+  background:var(--bg3); color:var(--text);
+}
+.rb-odds { font-family:'DM Mono',monospace; font-size:.8rem; opacity:.65; }
+.rb-red   { border-color:#6b0000; color:#ff8080; }
+.rb-red:hover,.rb-red.selected   { background:rgba(139,0,0,.45); border-color:#e74c3c; color:#fff; box-shadow:0 0 18px rgba(231,76,60,.5); }
+.rb-green { border-color:#145214; color:#2ecc71; }
+.rb-green:hover,.rb-green.selected { background:rgba(26,122,26,.4); border-color:#27ae60; color:#fff; box-shadow:0 0 18px rgba(39,174,96,.5); }
+.rb-black { border-color:#3a3a3a; color:#bbb; }
+.rb-black:hover,.rb-black.selected { background:rgba(50,50,50,.9); border-color:#888; color:#fff; box-shadow:0 0 18px rgba(180,180,180,.2); }
