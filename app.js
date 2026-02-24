@@ -324,34 +324,39 @@ window.spinRoulette = async function() {
   document.getElementById("roulette-spin-btn").disabled = true;
   document.getElementById("roulette-result-box").style.visibility = "hidden";
 
-  // Tirage du numéro gagnant
+  // Tirage
   const result      = WHEEL_ORDER[Math.floor(Math.random() * SLOT_COUNT)];
   const resultColor = rouletteColor(result);
   const winIdx      = WHEEL_ORDER.indexOf(result);
 
-  // L'aiguille est fixe à -PI/2 (haut du canvas).
-  // On veut que la case gagnante arrive sous l'aiguille.
-  // La case winIdx est à l'angle (winIdx * SLOT_ANGLE) dans le repère de la roue.
-  // Pour qu'elle soit sous l'aiguille (-PI/2), la roue doit tourner de :
-  //   newWheelAngle = -PI/2 - winIdx * SLOT_ANGLE   (mod 2PI)
-  // On ajoute des tours complets pour l'animation.
-  const POINTER  = -Math.PI / 2;
-  const turns    = 6 + Math.floor(Math.random() * 4); // 6-9 tours entiers
-  const targetWheelAngle = rouletteAngle
-    - ((rouletteAngle - POINTER + winIdx * SLOT_ANGLE) % (2 * Math.PI))
-    + turns * 2 * Math.PI;
+  // ── Calcul de l'angle final de la roue ──────────────────────
+  // L'aiguille est fixe à POINTER = -PI/2 (sommet du canvas).
+  // La case winIdx a son CENTRE à l'angle (wheelAngle + winIdx*SLOT_ANGLE).
+  // On veut : wheelAngle_final + winIdx*SLOT_ANGLE ≡ POINTER  (mod 2PI)
+  // Donc    : wheelAngle_final = POINTER - winIdx*SLOT_ANGLE  (mod 2PI)
+  //
+  // Formule bulletproof (marche quel que soit rouletteAngle courant) :
+  const POINTER = -Math.PI / 2;
+  const turns   = 7 + Math.floor(Math.random() * 4); // 7-10 tours
+  const TAU     = 2 * Math.PI;
+  // diff = combien la roue doit encore tourner pour aligner la case sous l'aiguille
+  const rawDiff = ((POINTER - winIdx * SLOT_ANGLE) - rouletteAngle % TAU + TAU * 100) % TAU;
+  const targetWheelAngle = rouletteAngle + rawDiff + turns * TAU;
 
   const startWheelAngle = rouletteAngle;
   const totalDist       = targetWheelAngle - startWheelAngle;
 
-  // La bille tourne en sens inverse à ~1.5x la vitesse de la roue,
-  // puis tombe dans la case gagnante (angle = POINTER dans le repère fixe).
+  // ── Bille : tourne en sens inverse puis tombe sous l'aiguille ─
   const startBallAngle = ballAngle;
-  const peakBallAngle  = startBallAngle - turns * 1.5 * 2 * Math.PI; // sens inverse
-  // Angle final de la bille = position de la case gagnante dans le repère fixe = POINTER
-  const finalBallAngle = POINTER;
+  // La bille fait ~turns*1.4 tours en sens inverse
+  const peakBallAngle  = startBallAngle - turns * 1.4 * TAU;
+  // Angle final de la bille = POINTER (elle tombe sous l'aiguille)
+  // Mais on normalise pour que le chemin soit court en phase 2
+  const peakNorm = peakBallAngle % TAU;
+  const pointerNorm = POINTER % TAU;
+  let finalBallAngle = peakBallAngle + ((pointerNorm - peakNorm) % TAU + TAU) % TAU;
 
-  const duration  = 5000;
+  const duration  = 5200;
   const startTime = performance.now();
 
   function animate(now) {
@@ -359,24 +364,19 @@ window.spinRoulette = async function() {
     const progress = Math.min(elapsed / duration, 1);
     const eased    = easeOutRoulette(progress);
 
-    // Rotation de la roue
     rouletteAngle = startWheelAngle + totalDist * eased;
 
-    // Phase 1 (0 → 0.75) : bille tourne vite à l'extérieur
-    if (progress < 0.75) {
-      const p = progress / 0.75;
+    if (progress < 0.72) {
+      // Phase 1 : bille tourne vite à l'extérieur (sens inverse)
+      const p  = progress / 0.72;
       const ep = easeOutRoulette(p);
       ballTrack = 0.88;
       ballAngle = startBallAngle + (peakBallAngle - startBallAngle) * ep;
     } else {
-      // Phase 2 (0.75 → 1) : bille ralentit et tombe sur la case gagnante
-      const p  = (progress - 0.75) / 0.25;
+      // Phase 2 : bille décélère et tombe dans la case gagnante
+      const p  = (progress - 0.72) / 0.28;
       const ep = easeOutRoulette(p);
-      // position angulaire de la bille au début de phase 2
-      const ballAtPhase2 = startBallAngle + (peakBallAngle - startBallAngle);
-      // on l'amène progressivement vers finalBallAngle
-      ballAngle = ballAtPhase2 + (finalBallAngle - ballAtPhase2) * ep;
-      // track : tombe de 0.88 vers 0.65 (dans la case)
+      ballAngle = peakBallAngle + (finalBallAngle - peakBallAngle) * ep;
       ballTrack = 0.88 - 0.23 * ep;
     }
 
@@ -385,7 +385,6 @@ window.spinRoulette = async function() {
     if (progress < 1) {
       requestAnimationFrame(animate);
     } else {
-      // Position finale exacte
       rouletteAngle = targetWheelAngle;
       ballAngle     = finalBallAngle;
       ballTrack     = 0.65;
