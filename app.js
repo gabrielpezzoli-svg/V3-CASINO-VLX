@@ -212,16 +212,23 @@ function rouletteColor(n) {
   return reds.has(n) ? "red" : "black";
 }
 
-const SLOT_COUNT  = 37;
-const SLOT_ANGLE  = (2 * Math.PI) / SLOT_COUNT;
-let rouletteAngle = 0;
+const SLOT_COUNT = 37;
+const SLOT_ANGLE = (2 * Math.PI) / SLOT_COUNT;
+const TAU = 2 * Math.PI;
+
+let rouletteAngle    = 0;   // angle actuel de la roue
 let rouletteSpinning = false;
 let rouletteSelectedColor = null;
+// ballAngle : angle ABSOLU de la bille dans le repère fixe du canvas
+// On le stocke en offset PAR RAPPORT à la roue pour qu'elle suive visuellement
+let ballWheelOffset = 0;    // offset de la bille par rapport à la roue
+let ballVisible     = false;
+let ballTrackR      = 0.74; // rayon relatif (dans la piste)
 
 const ROUL_COLORS = {
-  green: { fill:"#1a5c1a", stroke:"#2ecc71", text:"#fff" },
-  red:   { fill:"#7a0000", stroke:"#e74c3c", text:"#fff" },
-  black: { fill:"#1a1a1a", stroke:"#555",    text:"#ddd" }
+  green: { fill:"#1a5c1a", text:"#fff" },
+  red:   { fill:"#7a0000", text:"#fff" },
+  black: { fill:"#1a1a1a", text:"#ddd" }
 };
 
 window.selectRouletteColor = function(color) {
@@ -246,9 +253,9 @@ function drawRoulette(angle) {
 
   // Ombre dorée
   ctx.save();
-  ctx.shadowColor = "rgba(212,160,23,0.6)";
-  ctx.shadowBlur  = 30;
-  ctx.beginPath(); ctx.arc(cx, cy, R+3, 0, 2*Math.PI);
+  ctx.shadowColor = "rgba(212,160,23,0.5)";
+  ctx.shadowBlur  = 28;
+  ctx.beginPath(); ctx.arc(cx, cy, R+3, 0, TAU);
   ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 3; ctx.stroke();
   ctx.restore();
 
@@ -257,137 +264,106 @@ function drawRoulette(angle) {
     const startA = angle + i * SLOT_ANGLE - SLOT_ANGLE/2;
     const endA   = startA + SLOT_ANGLE;
     const col    = rouletteColor(num);
-    const theme  = ROUL_COLORS[col];
     ctx.beginPath(); ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, R, startA, endA); ctx.closePath();
-    ctx.fillStyle = theme.fill; ctx.fill();
+    ctx.fillStyle   = ROUL_COLORS[col].fill; ctx.fill();
     ctx.strokeStyle = "#0a0a0f"; ctx.lineWidth = 1.2; ctx.stroke();
     // Numéro
     const midA = startA + SLOT_ANGLE/2;
     const tx = cx + R*0.74*Math.cos(midA), ty = cy + R*0.74*Math.sin(midA);
     ctx.save(); ctx.translate(tx, ty); ctx.rotate(midA + Math.PI/2);
-    ctx.fillStyle = theme.text;
+    ctx.fillStyle = ROUL_COLORS[col].text;
     ctx.font = `bold ${R < 140 ? 8 : 10}px 'DM Mono',monospace`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(String(num), 0, 0); ctx.restore();
   });
 
-  // Anneau doré externe
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2*Math.PI);
+  // Anneau + picots dorés
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU);
   ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 5; ctx.stroke();
-
-  // Petits séparateurs (picots)
   for (let i = 0; i < SLOT_COUNT; i++) {
     const a = angle + i * SLOT_ANGLE;
-    const x1 = cx + (R-8) * Math.cos(a), y1 = cy + (R-8) * Math.sin(a);
-    const x2 = cx + (R+1) * Math.cos(a), y2 = cy + (R+1) * Math.sin(a);
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.beginPath();
+    ctx.moveTo(cx+(R-8)*Math.cos(a), cy+(R-8)*Math.sin(a));
+    ctx.lineTo(cx+(R+1)*Math.cos(a), cy+(R+1)*Math.sin(a));
     ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 2; ctx.stroke();
   }
 
   // Centre
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Ri);
   grad.addColorStop(0, "#2a2a3a"); grad.addColorStop(1, "#0f0f18");
-  ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, 2*Math.PI);
+  ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, TAU);
   ctx.fillStyle = grad; ctx.fill();
   ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 2.5; ctx.stroke();
-
-  // Logo
   ctx.fillStyle = "#d4a017";
   ctx.font = `bold ${R < 140 ? 13 : 17}px 'Playfair Display',serif`;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText("VLX", cx, cy);
 
-  // Bille
-  const bR = R * ballTrack;
-  const bx = cx + bR * Math.cos(ballAngle), by = cy + bR * Math.sin(ballAngle);
-  const br = R * 0.042;
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.9)"; ctx.shadowBlur = 10;
-  const radGrad = ctx.createRadialGradient(bx - br*0.35, by - br*0.35, br*0.05, bx, by, br);
-  radGrad.addColorStop(0, "#ffffff"); radGrad.addColorStop(0.45, "#e0e0e0");
-  radGrad.addColorStop(1, "#888");
-  ctx.beginPath(); ctx.arc(bx, by, br, 0, 2*Math.PI);
-  ctx.fillStyle = radGrad; ctx.fill(); ctx.restore();
+  // Bille — suit la roue via ballWheelOffset
+  if (ballVisible) {
+    const bAngle = angle + ballWheelOffset;
+    const bR = R * ballTrackR;
+    const bx = cx + bR * Math.cos(bAngle);
+    const by = cy + bR * Math.sin(bAngle);
+    const br = R * 0.048;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.9)"; ctx.shadowBlur = 12;
+    const rg = ctx.createRadialGradient(bx-br*0.35, by-br*0.35, br*0.05, bx, by, br);
+    rg.addColorStop(0, "#fff"); rg.addColorStop(0.5, "#ddd"); rg.addColorStop(1, "#888");
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU);
+    ctx.fillStyle = rg; ctx.fill(); ctx.restore();
+  }
 }
 
-function easeOutRoulette(t) { return 1 - Math.pow(1-t, 4); }
-
-let ballAngle = -Math.PI / 2;
-let ballTrack = 0.88;
+function easeOutRoulette(t) { return 1 - Math.pow(1 - t, 4); }
 
 window.spinRoulette = async function() {
   if (rouletteSpinning) return;
   if (!rouletteSelectedColor) { toast("Choisis une couleur d'abord !", "lose"); return; }
   const bet = parseBet("roulette-bet"); if (bet === null) return;
+
   rouletteSpinning = true;
+  ballVisible = false;
   document.getElementById("roulette-spin-btn").disabled = true;
   document.getElementById("roulette-result-box").style.visibility = "hidden";
 
-  // Tirage
+  // ── Tirage ──────────────────────────────────────────────────
   const result      = WHEEL_ORDER[Math.floor(Math.random() * SLOT_COUNT)];
   const resultColor = rouletteColor(result);
   const winIdx      = WHEEL_ORDER.indexOf(result);
 
-  // ── Calcul de l'angle final de la roue ──────────────────────
-  // L'aiguille est fixe à POINTER = -PI/2 (sommet du canvas).
-  // La case winIdx a son CENTRE à l'angle (wheelAngle + winIdx*SLOT_ANGLE).
-  // On veut : wheelAngle_final + winIdx*SLOT_ANGLE ≡ POINTER  (mod 2PI)
-  // Donc    : wheelAngle_final = POINTER - winIdx*SLOT_ANGLE  (mod 2PI)
-  //
-  // Formule bulletproof (marche quel que soit rouletteAngle courant) :
-  const POINTER = -Math.PI / 2;
-  const turns   = 7 + Math.floor(Math.random() * 4); // 7-10 tours
-  const TAU     = 2 * Math.PI;
-  // diff = combien la roue doit encore tourner pour aligner la case sous l'aiguille
-  const rawDiff = ((POINTER - winIdx * SLOT_ANGLE) - rouletteAngle % TAU + TAU * 100) % TAU;
-  const targetWheelAngle = rouletteAngle + rawDiff + turns * TAU;
+  // ── Angle final de la roue ───────────────────────────────────
+  // On veut que le CENTRE de la case winIdx soit à -PI/2 (haut).
+  // Centre de la case i dans le repère roue = i * SLOT_ANGLE
+  // On veut : rouletteAngle_final + winIdx * SLOT_ANGLE = -PI/2  (mod TAU)
+  // => rouletteAngle_final = -PI/2 - winIdx * SLOT_ANGLE  (mod TAU)
+  const TARGET_ABS = -Math.PI / 2 - winIdx * SLOT_ANGLE;
+  // Calculer combien tourner depuis rouletteAngle pour atteindre TARGET_ABS
+  const turns = 8;
+  const diff  = ((TARGET_ABS - rouletteAngle) % TAU + TAU) % TAU; // toujours positif
+  const targetAngle = rouletteAngle + diff + turns * TAU;
 
-  const startWheelAngle = rouletteAngle;
-  const totalDist       = targetWheelAngle - startWheelAngle;
-
-  // ── Bille : tourne en sens inverse puis tombe sous l'aiguille ─
-  const startBallAngle = ballAngle;
-  // La bille fait ~turns*1.4 tours en sens inverse
-  const peakBallAngle  = startBallAngle - turns * 1.4 * TAU;
-  // Angle final de la bille = POINTER (elle tombe sous l'aiguille)
-  // Mais on normalise pour que le chemin soit court en phase 2
-  const peakNorm = peakBallAngle % TAU;
-  const pointerNorm = POINTER % TAU;
-  let finalBallAngle = peakBallAngle + ((pointerNorm - peakNorm) % TAU + TAU) % TAU;
-
-  const duration  = 5200;
-  const startTime = performance.now();
+  const startAngle = rouletteAngle;
+  const duration   = 5000;
+  const startTime  = performance.now();
 
   function animate(now) {
-    const elapsed  = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased    = easeOutRoulette(progress);
-
-    rouletteAngle = startWheelAngle + totalDist * eased;
-
-    if (progress < 0.72) {
-      // Phase 1 : bille tourne vite à l'extérieur (sens inverse)
-      const p  = progress / 0.72;
-      const ep = easeOutRoulette(p);
-      ballTrack = 0.88;
-      ballAngle = startBallAngle + (peakBallAngle - startBallAngle) * ep;
-    } else {
-      // Phase 2 : bille décélère et tombe dans la case gagnante
-      const p  = (progress - 0.72) / 0.28;
-      const ep = easeOutRoulette(p);
-      ballAngle = peakBallAngle + (finalBallAngle - peakBallAngle) * ep;
-      ballTrack = 0.88 - 0.23 * ep;
-    }
-
+    const t = Math.min((now - startTime) / duration, 1);
+    rouletteAngle = startAngle + (targetAngle - startAngle) * easeOutRoulette(t);
     drawRoulette(rouletteAngle);
-
-    if (progress < 1) {
+    if (t < 1) {
       requestAnimationFrame(animate);
     } else {
-      rouletteAngle = targetWheelAngle;
-      ballAngle     = finalBallAngle;
-      ballTrack     = 0.65;
+      // ── Animation finie : placer la bille exactement sur la case ──
+      rouletteAngle = targetAngle;
+      // ballWheelOffset = angle de la case dans le repère roue = winIdx * SLOT_ANGLE
+      // mais la bille est dans le repère fixe, donc :
+      // bAngle_fixe = rouletteAngle + ballWheelOffset = -PI/2 (centre de la case)
+      // => ballWheelOffset = -PI/2 - rouletteAngle
+      ballWheelOffset = -Math.PI / 2 - rouletteAngle;
+      ballTrackR  = 0.74;
+      ballVisible = true;
       drawRoulette(rouletteAngle);
       endSpinRoulette(result, resultColor, bet);
     }
