@@ -468,11 +468,16 @@ function renderFriendRequests(reqs) {
 }
 
 window.acceptFriendRequest = async function(uid, name) {
+  const req = (userData.friendRequests||[]).find(r=>r.uid===uid);
+  // Ajoute l'autre dans MES amis + retire la demande
   await updateDoc(doc(db,"users",currentUser.uid),{
-    friends:arrayUnion(uid),
-    friendRequests:arrayRemove(...(userData.friendRequests||[]).filter(r=>r.uid===uid))
+    friends: arrayUnion(uid),
+    friendRequests: req ? arrayRemove(req) : arrayRemove()
   });
-  await updateDoc(doc(db,"users",uid),{friends:arrayUnion(currentUser.uid)});
+  // Ajoute MOI dans SES amis
+  await updateDoc(doc(db,"users",uid),{
+    friends: arrayUnion(currentUser.uid)
+  });
   toast(`${name} est maintenant votre ami ! 🤝`,"win");
 };
 
