@@ -14,7 +14,7 @@
 <div id="page-login" class="page active">
   <div class="login-bg">
     <div class="bg-glow"></div><div class="bg-glow glow2"></div>
-    <div class="card-suits">&#9824; &#9829; &#9830; &#9827;</div>
+    <div class="card-suits">♠ ♥ ♦ ♣</div>
   </div>
   <div class="login-box">
     <div class="logo"><span class="logo-v">V</span><span class="logo-lx">LX</span><div class="logo-sub">CASINO</div></div>
@@ -34,15 +34,15 @@
     <div class="lobby-user-area">
       <div class="avatar-wrap">
         <img id="user-avatar" src="" alt="avatar" class="avatar"/>
-        <button class="avatar-edit-btn" onclick="openEditName()" title="Modifier le nom">&#9998;</button>
+        <button class="avatar-edit-btn" onclick="openEditName()" title="Modifier le nom">✏️</button>
       </div>
-      <button id="logout-btn" class="btn-logout">D&#233;connexion</button>
+      <button id="logout-btn" class="btn-logout">Déconnexion</button>
     </div>
   </div>
   <div class="lobby-body">
     <div class="social-bar">
-      <button class="social-btn" onclick="goToGame('joueurs')">
-        <span class="social-btn-icon">&#128269;</span>
+      <button class="social-btn" onclick="goToPage('joueurs')">
+        <span class="social-btn-icon">🔍</span>
         <span class="social-btn-label">Joueurs</span>
       </button>
     </div>
@@ -53,55 +53,59 @@
     </div>
     <div class="lobby-games-grid">
       <div class="game-card" onclick="goToGame('roulette')">
-        <div class="gc-icon">&#127921;</div><div class="gc-name">Roulette</div>
-        <div class="gc-desc">Rouge &#215;2 &middot; Noir &#215;2 &middot; Vert &#215;20</div>
-        <div class="gc-play">JOUER &rarr;</div>
+        <div class="gc-icon">🎡</div>
+        <div class="gc-name">Roulette</div>
+        <div class="gc-desc">Rouge ×2 · Noir ×2 · Vert ×20</div>
+        <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card" onclick="goToGame('dice')">
-        <div class="gc-icon">&#127922;</div><div class="gc-name">Dice</div>
-        <div class="gc-desc">Choisis un seuil &middot; Plus c'est risqu&#233;, plus tu gagnes</div>
-        <div class="gc-play">JOUER &rarr;</div>
+        <div class="gc-icon">🎲</div>
+        <div class="gc-name">Dice</div>
+        <div class="gc-desc">Choisis un seuil · Plus c'est risqué, plus tu gagnes</div>
+        <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card" onclick="goToGame('mines')">
-        <div class="gc-icon">&#128163;</div><div class="gc-name">Mines</div>
-        <div class="gc-desc">Grille 5&#215;5 &middot; 5 mines &middot; Cashout libre</div>
-        <div class="gc-play">JOUER &rarr;</div>
+        <div class="gc-icon">💣</div>
+        <div class="gc-name">Mines</div>
+        <div class="gc-desc">Grille 5×5 · 5 mines · Cashout libre</div>
+        <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card" onclick="goToGame('coinflip')">
-        <div class="gc-icon">&#129689;</div><div class="gc-name">Pile ou Face</div>
-        <div class="gc-desc">Bleu ou Rouge &middot; Gain &#215;2</div>
-        <div class="gc-play">JOUER &rarr;</div>
+        <div class="gc-icon">🪙</div>
+        <div class="gc-name">Pile ou Face</div>
+        <div class="gc-desc">Bleu ou Rouge · Gain ×2</div>
+        <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card" onclick="goToGame('slots')">
-        <div class="gc-icon">&#127920;</div><div class="gc-name">Machine &#224; Sous</div>
-        <div class="gc-desc">2 pareils &#215;1.5 &middot; 3 pareils &#215;2.5</div>
-        <div class="gc-play">JOUER &rarr;</div>
+        <div class="gc-icon">🎰</div>
+        <div class="gc-name">Machine à Sous</div>
+        <div class="gc-desc">2 pareils ×1.5 · 3 pareils ×2.5</div>
+        <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card" onclick="goToGame('blackjack')">
-        <div class="gc-icon">&#127183;</div><div class="gc-name">Blackjack</div>
-        <div class="gc-desc">Contre le dealer &middot; 21 sans d&#233;passer</div>
-        <div class="gc-play">JOUER &rarr;</div>
-      </div>
-      <div class="game-card plinko-card" onclick="goToGame('plinko')">
-        <div class="gc-icon">&#128302;</div><div class="gc-name">Plinko</div>
-        <div class="gc-desc">L&#226;che la bille &middot; &#215;0.3 &#224; &#215;10</div>
-        <div class="gc-play">JOUER &rarr;</div>
+        <div class="gc-icon">🃏</div>
+        <div class="gc-name">Blackjack</div>
+        <div class="gc-desc">Contre le dealer · 21 sans dépasser</div>
+        <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card leaderboard-card" onclick="goToGame('leaderboard')">
-        <div class="gc-icon">&#127942;</div><div class="gc-name">Classement</div>
-        <div class="gc-desc">Top joueurs en temps r&#233;el</div>
-        <div class="gc-play">VOIR &rarr;</div>
+        <div class="gc-icon">🏆</div>
+        <div class="gc-name">Classement</div>
+        <div class="gc-desc">Top joueurs en temps réel</div>
+        <div class="gc-play">VOIR →</div>
       </div>
       <div class="game-card bonus-card" id="bonus-card" onclick="claimBonus()">
-        <div class="gc-icon">&#127873;</div><div class="gc-name">Bonus</div>
+        <div class="gc-icon">🎁</div>
+        <div class="gc-name">Bonus</div>
         <div class="gc-desc">+50 VLX gratuits toutes les 5 minutes</div>
-        <div id="bonus-label" class="gc-play">R&#201;CLAMER &rarr;</div>
+        <div id="bonus-label" class="gc-play">RÉCLAMER →</div>
         <div id="bonus-timer" class="bonus-timer" style="display:none"></div>
       </div>
       <div class="game-card tombola-card" onclick="goToGame('tombola')">
-        <div class="gc-icon">&#127967;</div><div class="gc-name">Tombola</div>
-        <div class="gc-desc">50 VLX / ticket &middot; Tirage toutes les 24h</div>
-        <div class="gc-play">PARTICIPER &rarr;</div>
+        <div class="gc-icon">🎟️</div>
+        <div class="gc-name">Tombola</div>
+        <div class="gc-desc">50 VLX / ticket · Tirage toutes les 24h</div>
+        <div class="gc-play">PARTICIPER →</div>
       </div>
     </div>
   </div>
@@ -110,31 +114,31 @@
 <!-- PAGE ROULETTE -->
 <div id="page-roulette" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#127921; Roulette</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎡 Roulette</div>
     <div id="roulette-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content roulette-content">
     <div class="roulette-scene">
-      <div class="roulette-pin">&#9660;</div>
+      <div class="roulette-pin">▼</div>
       <canvas id="roulette-canvas" width="340" height="340"></canvas>
     </div>
     <div id="roulette-result-box" class="roulette-result-box" style="visibility:hidden">
       <span id="roulette-result-num" class="rr-num">0</span>
-      <span id="roulette-result-label" class="rr-label">&#8212;</span>
+      <span id="roulette-result-label" class="rr-label">—</span>
     </div>
     <div class="roulette-bets-row">
-      <button id="rb-red" class="roulette-bet-btn rb-red" onclick="selectRouletteColor('red')">&#128308; Rouge <span class="rb-odds">&#215;2</span></button>
-      <button id="rb-green" class="roulette-bet-btn rb-green" onclick="selectRouletteColor('green')">&#128994; Z&#233;ro <span class="rb-odds">&#215;20</span></button>
-      <button id="rb-black" class="roulette-bet-btn rb-black" onclick="selectRouletteColor('black')">&#9899; Noir <span class="rb-odds">&#215;2</span></button>
+      <button id="rb-red"   class="roulette-bet-btn rb-red"   onclick="selectRouletteColor('red')">🔴 Rouge <span class="rb-odds">×2</span></button>
+      <button id="rb-green" class="roulette-bet-btn rb-green" onclick="selectRouletteColor('green')">🟢 Zéro <span class="rb-odds">×20</span></button>
+      <button id="rb-black" class="roulette-bet-btn rb-black" onclick="selectRouletteColor('black')">⚫ Noir <span class="rb-odds">×2</span></button>
     </div>
     <div class="bet-panel">
       <label class="bet-label">Mise (VLX)</label>
       <div class="bet-row">
         <input type="number" id="roulette-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('roulette-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('roulette-bet',2)">&#215;2</button>
+          <button onclick="quickBet('roulette-bet',0.5)">½</button>
+          <button onclick="quickBet('roulette-bet',2)">×2</button>
           <button onclick="setMax('roulette-bet')">MAX</button>
         </div>
       </div>
@@ -146,8 +150,8 @@
 <!-- PAGE DICE -->
 <div id="page-dice" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#127922; Dice</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎲 Dice</div>
     <div id="dice-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content">
@@ -159,15 +163,15 @@
       <div class="dice-bar-labels"><span>1</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
     </div>
     <div class="dice-result-row">
-      <div id="dice-rolled" class="dice-rolled">&#8212;</div>
-      <div class="dice-vs">r&#233;sultat</div>
+      <div id="dice-rolled" class="dice-rolled">—</div>
+      <div class="dice-vs">résultat</div>
     </div>
     <div class="dice-controls">
       <div class="dice-ctrl-group">
         <label class="bet-label">Seuil cible</label>
         <div class="dice-number-row">
-          <button class="dice-adj-btn" onclick="adjustTarget(-5)">&#8722;5</button>
-          <button class="dice-adj-btn" onclick="adjustTarget(-1)">&#8722;1</button>
+          <button class="dice-adj-btn" onclick="adjustTarget(-5)">−5</button>
+          <button class="dice-adj-btn" onclick="adjustTarget(-1)">−1</button>
           <div id="dice-target-display" class="dice-target-display">50</div>
           <button class="dice-adj-btn" onclick="adjustTarget(1)">+1</button>
           <button class="dice-adj-btn" onclick="adjustTarget(5)">+5</button>
@@ -176,13 +180,13 @@
       <div class="dice-ctrl-group">
         <label class="bet-label">Direction</label>
         <div class="dice-dir-btns">
-          <button id="dir-under" class="dir-btn active" onclick="setDirection('under')">&#11015; SOUS</button>
-          <button id="dir-over" class="dir-btn" onclick="setDirection('over')">&#11014; SUR</button>
+          <button id="dir-under" class="dir-btn active" onclick="setDirection('under')">⬇ SOUS</button>
+          <button id="dir-over" class="dir-btn" onclick="setDirection('over')">⬆ SUR</button>
         </div>
       </div>
       <div class="dice-ctrl-group">
         <label class="bet-label">Multiplicateur</label>
-        <div id="dice-mult-display" class="dice-mult-display">&#215;2.00</div>
+        <div id="dice-mult-display" class="dice-mult-display">×2.00</div>
       </div>
     </div>
     <div class="bet-panel">
@@ -190,12 +194,12 @@
       <div class="bet-row">
         <input type="number" id="dice-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('dice-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('dice-bet',2)">&#215;2</button>
+          <button onclick="quickBet('dice-bet',0.5)">½</button>
+          <button onclick="quickBet('dice-bet',2)">×2</button>
           <button onclick="setMax('dice-bet')">MAX</button>
         </div>
       </div>
-      <button id="dice-roll-btn" class="btn-play" onclick="rollDice()">&#127922; LANCER</button>
+      <button id="dice-roll-btn" class="btn-play" onclick="rollDice()">🎲 LANCER</button>
     </div>
   </div>
 </div>
@@ -203,29 +207,29 @@
 <!-- PAGE MINES -->
 <div id="page-mines" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#128163; Mines</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">💣 Mines</div>
     <div id="mines-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content mines-layout">
     <div class="mines-sidebar">
       <div class="mines-info">
-        <div class="info-row"><span>Mise</span><span id="mines-bet-display">&#8212;</span></div>
-        <div class="info-row"><span>Cases s&#251;res</span><span id="mines-safe-count">0</span></div>
-        <div class="info-row"><span>Multiplicateur</span><span id="mines-multiplier">&#215;1.00</span></div>
-        <div class="info-row"><span>Gain potentiel</span><span id="mines-potential">&#8212;</span></div>
+        <div class="info-row"><span>Mise</span><span id="mines-bet-display">—</span></div>
+        <div class="info-row"><span>Cases sûres</span><span id="mines-safe-count">0</span></div>
+        <div class="info-row"><span>Multiplicateur</span><span id="mines-multiplier">×1.00</span></div>
+        <div class="info-row"><span>Gain potentiel</span><span id="mines-potential">—</span></div>
       </div>
       <label class="bet-label">Mise (VLX)</label>
       <div class="bet-row">
         <input type="number" id="mines-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('mines-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('mines-bet',2)">&#215;2</button>
+          <button onclick="quickBet('mines-bet',0.5)">½</button>
+          <button onclick="quickBet('mines-bet',2)">×2</button>
           <button onclick="setMax('mines-bet')">MAX</button>
         </div>
       </div>
-      <button id="mines-start-btn" class="btn-play" onclick="startMines()">D&#201;MARRER</button>
-      <button id="mines-cashout-btn" class="btn-cashout" onclick="cashoutMines()" disabled>&#128176; CASHOUT</button>
+      <button id="mines-start-btn" class="btn-play" onclick="startMines()">DÉMARRER</button>
+      <button id="mines-cashout-btn" class="btn-cashout" onclick="cashoutMines()" disabled>💰 CASHOUT</button>
     </div>
     <div id="mines-grid" class="mines-grid"></div>
   </div>
@@ -234,14 +238,14 @@
 <!-- PAGE COINFLIP -->
 <div id="page-coinflip" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#129689; Pile ou Face</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🪙 Pile ou Face</div>
     <div id="coinflip-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content coinflip-arena">
     <div id="coin" class="coin">
-      <div class="coin-face coin-blue">&#128309;</div>
-      <div class="coin-back coin-red">&#128308;</div>
+      <div class="coin-face coin-blue">🔵</div>
+      <div class="coin-back coin-red">🔴</div>
     </div>
     <div id="coinflip-result" class="coinflip-result"></div>
     <div class="choice-btns">
@@ -253,8 +257,8 @@
       <div class="bet-row">
         <input type="number" id="coinflip-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('coinflip-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('coinflip-bet',2)">&#215;2</button>
+          <button onclick="quickBet('coinflip-bet',0.5)">½</button>
+          <button onclick="quickBet('coinflip-bet',2)">×2</button>
           <button onclick="setMax('coinflip-bet')">MAX</button>
         </div>
       </div>
@@ -263,51 +267,59 @@
   </div>
 </div>
 
-<!-- PAGE MACHINE A SOUS -->
+<!-- PAGE MACHINE À SOUS -->
 <div id="page-slots" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#127920; Machine &#224; Sous</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎰 Machine à Sous</div>
     <div id="slots-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content">
     <div class="slots-machine">
-      <div class="slots-top-bar"><span>VLX</span><span>CASINO</span><span>777</span></div>
+      <div class="slots-top-bar">
+        <span>VLX</span><span>CASINO</span><span>777</span>
+      </div>
       <div class="slots-reels-wrap">
         <div class="slots-reels">
-          <div class="slots-reel" id="reel-0"><div class="reel-strip" id="strip-0"></div></div>
-          <div class="slots-reel" id="reel-1"><div class="reel-strip" id="strip-1"></div></div>
-          <div class="slots-reel" id="reel-2"><div class="reel-strip" id="strip-2"></div></div>
+          <div class="slots-reel" id="reel-0">
+            <div class="reel-strip" id="strip-0"></div>
+          </div>
+          <div class="slots-reel" id="reel-1">
+            <div class="reel-strip" id="strip-1"></div>
+          </div>
+          <div class="slots-reel" id="reel-2">
+            <div class="reel-strip" id="strip-2"></div>
+          </div>
         </div>
         <div class="slots-payline"></div>
       </div>
       <div id="slots-result-msg" class="slots-result-msg"></div>
     </div>
     <div class="slots-paytable">
-      <div class="slots-pay-row"><span>2 symboles identiques</span><span class="slots-pay-mult">&#215;1.5</span></div>
-      <div class="slots-pay-row"><span>3 symboles identiques</span><span class="slots-pay-mult">&#215;2.5</span></div>
-      <div class="slots-pay-row"><span>Aucun r&#233;sultat</span><span class="slots-pay-mult">Perdu</span></div>
+      <div class="slots-pay-row"><span>2 symboles identiques</span><span class="slots-pay-mult">×1.5</span></div>
+      <div class="slots-pay-row"><span>3 symboles identiques</span><span class="slots-pay-mult">×2.5</span></div>
+      <div class="slots-pay-row"><span>Aucun résultat</span><span class="slots-pay-mult">Perdu</span></div>
     </div>
     <div class="bet-panel">
       <label class="bet-label">Mise (VLX)</label>
       <div class="bet-row">
         <input type="number" id="slots-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('slots-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('slots-bet',2)">&#215;2</button>
+          <button onclick="quickBet('slots-bet',0.5)">½</button>
+          <button onclick="quickBet('slots-bet',2)">×2</button>
           <button onclick="setMax('slots-bet')">MAX</button>
         </div>
       </div>
-      <button id="slots-spin-btn" class="btn-play" onclick="spinSlots()">&#127920; LANCER</button>
+      <button id="slots-spin-btn" class="btn-play" onclick="spinSlots()">🎰 LANCER</button>
     </div>
   </div>
 </div>
 
-<!-- PAGE BLACKJACK SOLO -->
+<!-- PAGE BLACKJACK -->
 <div id="page-blackjack" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#127183; Blackjack</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🃏 Blackjack</div>
     <div id="blackjack-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content bj-content">
@@ -323,53 +335,21 @@
       </div>
     </div>
     <div class="bj-actions" id="bj-actions" style="display:none">
-      <button class="bj-btn bj-btn-hit" onclick="bjHit()">&#127183; TIRER</button>
-      <button class="bj-btn bj-btn-stand" onclick="bjStand()">&#9995; RESTER</button>
-      <button class="bj-btn bj-btn-double" id="bj-double-btn" onclick="bjDouble()">&#215;2 DOUBLER</button>
+      <button class="bj-btn bj-btn-hit" onclick="bjHit()">🃏 TIRER</button>
+      <button class="bj-btn bj-btn-stand" onclick="bjStand()">✋ RESTER</button>
+      <button class="bj-btn bj-btn-double" id="bj-double-btn" onclick="bjDouble()">×2 DOUBLER</button>
     </div>
     <div class="bet-panel">
       <label class="bet-label">Mise (VLX)</label>
       <div class="bet-row">
         <input type="number" id="bj-bet" class="bet-input" value="100" min="10"/>
         <div class="quick-bets">
-          <button onclick="quickBet('bj-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('bj-bet',2)">&#215;2</button>
+          <button onclick="quickBet('bj-bet',0.5)">½</button>
+          <button onclick="quickBet('bj-bet',2)">×2</button>
           <button onclick="setMax('bj-bet')">MAX</button>
         </div>
       </div>
-      <button id="bj-deal-btn" class="btn-play" onclick="bjDeal()">&#127183; DISTRIBUER</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE BLACKJACK MULTI -->
-<div id="page-bjmulti" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="quitBJMulti()">&#8592; Quitter</button>
-    <div class="game-topbar-title">&#127183; Blackjack &#8212; D&#233;fi</div>
-    <div id="bjmulti-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content bj-content">
-    <div class="bj-area">
-      <div class="bj-dealer-zone">
-        <div class="bj-zone-label">ADVERSAIRE <span id="bjmulti-opp-score" class="bj-score-badge">?</span></div>
-        <div class="bj-cards" style="min-height:40px;align-items:center;">
-          <span style="color:var(--text2);font-size:.9rem">En train de jouer...</span>
-        </div>
-      </div>
-      <div id="bjmulti-status" class="bj-status">En attente...</div>
-      <div class="bj-player-zone">
-        <div class="bj-zone-label">VOUS <span id="bjmulti-score" class="bj-score-badge"></span></div>
-        <div id="bjmulti-player-cards" class="bj-cards"></div>
-      </div>
-    </div>
-    <div class="bj-actions" id="bjmulti-actions" style="display:none">
-      <button class="bj-btn bj-btn-hit" onclick="bjMultiHit()">&#127183; TIRER</button>
-      <button class="bj-btn bj-btn-stand" onclick="bjMultiStand()">&#9995; RESTER</button>
-      <button class="bj-btn bj-btn-double" id="bjmulti-double-btn" onclick="bjMultiDouble()">&#215;2 DOUBLER</button>
-    </div>
-    <div class="bet-panel">
-      <button id="bjmulti-deal-btn" class="btn-play" style="display:none" onclick="goToLobby()">&#8592; Retour au lobby</button>
+      <button id="bj-deal-btn" class="btn-play" onclick="bjDeal()">🃏 DISTRIBUER</button>
     </div>
   </div>
 </div>
@@ -377,8 +357,8 @@
 <!-- PAGE LEADERBOARD -->
 <div id="page-leaderboard" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#127942; Classement</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🏆 Classement</div>
     <div></div>
   </div>
   <div class="game-content">
@@ -391,8 +371,8 @@
 <!-- PAGE TOMBOLA -->
 <div id="page-tombola" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#127967; Tombola</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎟️ Tombola</div>
     <div id="tombola-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content">
@@ -404,37 +384,10 @@
       <div id="tombola-my-tickets" class="tombola-my-tickets">Vous avez <strong>0</strong> ticket(s)</div>
       <div class="tombola-buy-row">
         <input type="number" id="tombola-qty" class="bet-input" value="1" min="1" max="100" style="width:100px;text-align:center"/>
-        <span class="tombola-cost-label">&#215; 50 VLX = <span id="tombola-total-cost">50</span> VLX</span>
+        <span class="tombola-cost-label">× 50 VLX = <span id="tombola-total-cost">50</span> VLX</span>
       </div>
-      <button class="btn-play" onclick="buyTombolaTickets()">&#127967; ACHETER DES TICKETS</button>
+      <button class="btn-play" onclick="buyTombolaTickets()">🎟️ ACHETER DES TICKETS</button>
       <div id="tombola-participants" class="tombola-participants"></div>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE PLINKO -->
-<div id="page-plinko" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#128302; Plinko</div>
-    <div id="plinko-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content plinko-content">
-    <div class="plinko-arena">
-      <canvas id="plinko-canvas" width="420" height="480"></canvas>
-    </div>
-    <div class="plinko-multipliers" id="plinko-multipliers"></div>
-    <div class="bet-panel">
-      <label class="bet-label">Mise (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="plinko-bet" class="bet-input" value="100" min="10"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('plinko-bet',0.5)">&#189;</button>
-          <button onclick="quickBet('plinko-bet',2)">&#215;2</button>
-          <button onclick="setMax('plinko-bet')">MAX</button>
-        </div>
-      </div>
-      <button id="plinko-drop-btn" class="btn-play" onclick="dropPlinko()">&#128302; L&#194;CHER LA BILLE</button>
     </div>
   </div>
 </div>
@@ -442,8 +395,8 @@
 <!-- PAGE JOUEURS -->
 <div id="page-joueurs" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">&#8592; Retour</button>
-    <div class="game-topbar-title">&#128269; Joueurs</div>
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🔍 Joueurs</div>
     <div></div>
   </div>
   <div class="game-content" style="justify-content:flex-start;padding-top:1.5rem;">
@@ -459,8 +412,8 @@
 <!-- PAGE PROFIL JOUEUR -->
 <div id="page-profil" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToPage('joueurs')">&#8592; Retour</button>
-    <div class="game-topbar-title">&#128100; Profil</div>
+    <button class="back-btn" onclick="goToPage('joueurs')">← Retour</button>
+    <div class="game-topbar-title">👤 Profil</div>
     <div></div>
   </div>
   <div class="game-content" style="justify-content:flex-start;padding-top:2rem;gap:1.5rem;">
@@ -475,26 +428,23 @@
         <div id="profil-status" class="profil-status-label"></div>
       </div>
     </div>
+
+    <!-- ENVOYER VLX -->
     <div class="profil-action-box">
-      <div class="profil-action-title">&#128184; Envoyer des VLX</div>
+      <div class="profil-action-title">💸 Envoyer des VLX</div>
       <div class="bet-row">
         <input type="number" id="send-vlx-amount" class="bet-input" value="100" min="1" placeholder="Montant..."/>
       </div>
-      <button class="btn-play" onclick="sendVLX()">&#128184; ENVOYER</button>
+      <button class="btn-play" onclick="sendVLX()">💸 ENVOYER</button>
     </div>
+
+    <!-- DÉFI MORPION -->
     <div class="profil-action-box">
-      <div class="profil-action-title">&#10060;&#11093; D&#233;fi Morpion (3 manches)</div>
+      <div class="profil-action-title">🎮 Défi Morpion (3 manches)</div>
       <div class="bet-row">
         <input type="number" id="defi-bet-amount" class="bet-input" value="100" min="10" placeholder="Mise VLX (min 10)..."/>
       </div>
-      <button class="btn-play btn-defi-morpion" onclick="sendDefiFromProfil()">&#9876; ENVOYER LE D&#201;FI</button>
-    </div>
-    <div class="profil-action-box">
-      <div class="profil-action-title">&#127183; D&#233;fi Blackjack (1 manche)</div>
-      <div class="bet-row">
-        <input type="number" id="defi-bj-bet-amount" class="bet-input" value="100" min="10" placeholder="Mise VLX (min 10)..."/>
-      </div>
-      <button class="btn-play btn-defi-bj" onclick="sendDefiBJFromProfil()">&#127183; ENVOYER LE D&#201;FI</button>
+      <button class="btn-play btn-defi-profil" onclick="sendDefiFromProfil()">⚔️ ENVOYER LE DÉFI</button>
     </div>
   </div>
 </div>
@@ -502,15 +452,15 @@
 <!-- PAGE MORPION -->
 <div id="page-morpion" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="quitMorpion()">&#8592; Quitter</button>
-    <div class="game-topbar-title">&#10060;&#11093; Morpion</div>
+    <button class="back-btn" onclick="quitMorpion()">← Quitter</button>
+    <div class="game-topbar-title">❌⭕ Morpion</div>
     <div id="morpion-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content">
     <div id="morpion-status" class="morpion-status">En attente...</div>
     <div id="morpion-scores" class="morpion-scores" style="display:none">
       <span id="morpion-score-me">0</span>
-      <span class="morpion-score-sep">&#8212;</span>
+      <span class="morpion-score-sep">—</span>
       <span id="morpion-score-opp">0</span>
     </div>
     <div id="morpion-board" class="morpion-board">
@@ -533,8 +483,8 @@
   <div class="gin-content">
     <div id="gin-text" class="gin-text"></div>
     <div class="gin-btns">
-      <button class="gin-accept" onclick="acceptGameInvite()">&#9989; Accepter</button>
-      <button class="gin-refuse" onclick="refuseGameInvite()">&#10060; Refuser</button>
+      <button class="gin-accept" onclick="acceptGameInvite()">✅ Accepter</button>
+      <button class="gin-refuse" onclick="refuseGameInvite()">❌ Refuser</button>
     </div>
     <div id="gin-timer-bar" class="gin-timer-bar"><div id="gin-timer-fill" class="gin-timer-fill"></div></div>
   </div>
@@ -543,11 +493,11 @@
 <!-- MODAL MODIFIER NOM -->
 <div id="edit-name-modal" class="admin-modal-overlay" style="display:none" onclick="if(event.target===this)closeEditName()">
   <div class="admin-modal" style="max-width:360px">
-    <div class="admin-modal-title" style="color:var(--gold)">&#9998; Modifier le blaze</div>
-    <label class="bet-label">Nouveau nom (max 20 caract&#232;res)</label>
+    <div class="admin-modal-title" style="color:var(--gold)">✏️ Modifier le blaze</div>
+    <label class="bet-label">Nouveau nom (max 20 caractères)</label>
     <input type="text" id="edit-name-input" class="bet-input" maxlength="20" placeholder="Ton blaze..." style="width:100%;font-family:var(--ff-body);font-size:1.1rem"/>
     <div class="admin-modal-btns" style="margin-top:.5rem">
-      <button class="btn-admin-add" onclick="saveEditName()">&#9989; Sauvegarder</button>
+      <button class="btn-admin-add" onclick="saveEditName()">✅ Sauvegarder</button>
       <button class="btn-admin-close" onclick="closeEditName()">Annuler</button>
     </div>
   </div>
