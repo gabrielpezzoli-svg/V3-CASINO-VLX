@@ -464,3 +464,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .avatar-wrap{position:relative;display:inline-flex;align-items:center;}
 .avatar-edit-btn{position:absolute;bottom:-4px;right:-8px;background:var(--bg3);border:1px solid var(--border);border-radius:50%;width:20px;height:20px;font-size:.65rem;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);transition:.2s;padding:0;line-height:1;}
 .avatar-edit-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(212,160,23,.1);}
+
+/* ══ DÉFI BUTTONS ═══════════════════════════════════════════ */
+.btn-defi-morpion { background: linear-gradient(135deg,#7c3aed,#4c1d95) !important; color:#fff !important; }
+.btn-defi-bj { background: linear-gradient(135deg,#1a6fb5,#0a3060) !important; color:#fff !important; }
