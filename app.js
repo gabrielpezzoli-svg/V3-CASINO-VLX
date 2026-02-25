@@ -744,8 +744,6 @@ window.sendVLX = async function() {
   const amount = parseInt(document.getElementById("send-vlx-amount").value);
   if (!amount || amount < 1) { toast("Montant invalide", "lose"); return; }
   if (amount > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
-  const confirmed = confirm(`Envoyer ${amount} VLX à ${profilTargetData.name} ?`);
-  if (!confirmed) return;
   userData.balance -= amount;
   await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
   await updateDoc(doc(db, "users", profilTargetUid), { balance: increment(amount) });
