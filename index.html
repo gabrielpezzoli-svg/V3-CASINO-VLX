@@ -41,15 +41,9 @@
   </div>
   <div class="lobby-body">
     <div class="social-bar">
-      <button class="social-btn" onclick="goToPage('messagerie')">
-        <span class="social-btn-icon">💬</span>
-        <span class="social-btn-label">Messagerie</span>
-        <span id="friend-req-badge" class="social-badge" style="display:none">0</span>
-      </button>
-      <button class="social-btn" onclick="goToPage('amis')">
-        <span class="social-btn-icon">👥</span>
-        <span class="social-btn-label">Amis</span>
-        <span id="game-req-badge" class="social-badge" style="display:none">0</span>
+      <button class="social-btn" onclick="goToPage('joueurs')">
+        <span class="social-btn-icon">🔍</span>
+        <span class="social-btn-label">Joueurs</span>
       </button>
     </div>
     <div class="lobby-balance-card">
@@ -80,6 +74,18 @@
         <div class="gc-icon">🪙</div>
         <div class="gc-name">Pile ou Face</div>
         <div class="gc-desc">Bleu ou Rouge · Gain ×2</div>
+        <div class="gc-play">JOUER →</div>
+      </div>
+      <div class="game-card" onclick="goToGame('slots')">
+        <div class="gc-icon">🎰</div>
+        <div class="gc-name">Machine à Sous</div>
+        <div class="gc-desc">2 pareils ×1.5 · 3 pareils ×2.5</div>
+        <div class="gc-play">JOUER →</div>
+      </div>
+      <div class="game-card" onclick="goToGame('blackjack')">
+        <div class="gc-icon">🃏</div>
+        <div class="gc-name">Blackjack</div>
+        <div class="gc-desc">Contre le dealer · 21 sans dépasser</div>
         <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card leaderboard-card" onclick="goToGame('leaderboard')">
@@ -113,23 +119,19 @@
     <div id="roulette-balance" class="topbar-balance">0 VLX</div>
   </div>
   <div class="game-content roulette-content">
-
     <div class="roulette-scene">
       <div class="roulette-pin">▼</div>
       <canvas id="roulette-canvas" width="340" height="340"></canvas>
     </div>
-
     <div id="roulette-result-box" class="roulette-result-box" style="visibility:hidden">
       <span id="roulette-result-num" class="rr-num">0</span>
       <span id="roulette-result-label" class="rr-label">—</span>
     </div>
-
     <div class="roulette-bets-row">
       <button id="rb-red"   class="roulette-bet-btn rb-red"   onclick="selectRouletteColor('red')">🔴 Rouge <span class="rb-odds">×2</span></button>
       <button id="rb-green" class="roulette-bet-btn rb-green" onclick="selectRouletteColor('green')">🟢 Zéro <span class="rb-odds">×20</span></button>
       <button id="rb-black" class="roulette-bet-btn rb-black" onclick="selectRouletteColor('black')">⚫ Noir <span class="rb-odds">×2</span></button>
     </div>
-
     <div class="bet-panel">
       <label class="bet-label">Mise (VLX)</label>
       <div class="bet-row">
@@ -142,7 +144,6 @@
       </div>
       <button id="roulette-spin-btn" class="btn-play" onclick="spinRoulette()" disabled>CHOISIR UNE COULEUR D'ABORD</button>
     </div>
-
   </div>
 </div>
 
@@ -266,6 +267,93 @@
   </div>
 </div>
 
+<!-- PAGE MACHINE À SOUS -->
+<div id="page-slots" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🎰 Machine à Sous</div>
+    <div id="slots-balance" class="topbar-balance">0 VLX</div>
+  </div>
+  <div class="game-content">
+    <div class="slots-machine">
+      <div class="slots-top-bar">
+        <span>VLX</span><span>CASINO</span><span>777</span>
+      </div>
+      <div class="slots-reels-wrap">
+        <div class="slots-reels">
+          <div class="slots-reel" id="reel-0">
+            <div class="reel-strip" id="strip-0"></div>
+          </div>
+          <div class="slots-reel" id="reel-1">
+            <div class="reel-strip" id="strip-1"></div>
+          </div>
+          <div class="slots-reel" id="reel-2">
+            <div class="reel-strip" id="strip-2"></div>
+          </div>
+        </div>
+        <div class="slots-payline"></div>
+      </div>
+      <div id="slots-result-msg" class="slots-result-msg"></div>
+    </div>
+    <div class="slots-paytable">
+      <div class="slots-pay-row"><span>2 symboles identiques</span><span class="slots-pay-mult">×1.5</span></div>
+      <div class="slots-pay-row"><span>3 symboles identiques</span><span class="slots-pay-mult">×2.5</span></div>
+      <div class="slots-pay-row"><span>Aucun résultat</span><span class="slots-pay-mult">Perdu</span></div>
+    </div>
+    <div class="bet-panel">
+      <label class="bet-label">Mise (VLX)</label>
+      <div class="bet-row">
+        <input type="number" id="slots-bet" class="bet-input" value="100" min="10"/>
+        <div class="quick-bets">
+          <button onclick="quickBet('slots-bet',0.5)">½</button>
+          <button onclick="quickBet('slots-bet',2)">×2</button>
+          <button onclick="setMax('slots-bet')">MAX</button>
+        </div>
+      </div>
+      <button id="slots-spin-btn" class="btn-play" onclick="spinSlots()">🎰 LANCER</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE BLACKJACK -->
+<div id="page-blackjack" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="goToLobby()">← Retour</button>
+    <div class="game-topbar-title">🃏 Blackjack</div>
+    <div id="blackjack-balance" class="topbar-balance">0 VLX</div>
+  </div>
+  <div class="game-content bj-content">
+    <div class="bj-area">
+      <div class="bj-dealer-zone">
+        <div class="bj-zone-label">DEALER <span id="bj-dealer-score" class="bj-score-badge"></span></div>
+        <div id="bj-dealer-cards" class="bj-cards"></div>
+      </div>
+      <div id="bj-status" class="bj-status">Placez votre mise pour commencer</div>
+      <div class="bj-player-zone">
+        <div class="bj-zone-label">VOUS <span id="bj-player-score" class="bj-score-badge"></span></div>
+        <div id="bj-player-cards" class="bj-cards"></div>
+      </div>
+    </div>
+    <div class="bj-actions" id="bj-actions" style="display:none">
+      <button class="bj-btn bj-btn-hit" onclick="bjHit()">🃏 TIRER</button>
+      <button class="bj-btn bj-btn-stand" onclick="bjStand()">✋ RESTER</button>
+      <button class="bj-btn bj-btn-double" id="bj-double-btn" onclick="bjDouble()">×2 DOUBLER</button>
+    </div>
+    <div class="bet-panel">
+      <label class="bet-label">Mise (VLX)</label>
+      <div class="bet-row">
+        <input type="number" id="bj-bet" class="bet-input" value="100" min="10"/>
+        <div class="quick-bets">
+          <button onclick="quickBet('bj-bet',0.5)">½</button>
+          <button onclick="quickBet('bj-bet',2)">×2</button>
+          <button onclick="setMax('bj-bet')">MAX</button>
+        </div>
+      </div>
+      <button id="bj-deal-btn" class="btn-play" onclick="bjDeal()">🃏 DISTRIBUER</button>
+    </div>
+  </div>
+</div>
+
 <!-- PAGE LEADERBOARD -->
 <div id="page-leaderboard" class="page game-page">
   <div class="game-topbar">
@@ -304,32 +392,59 @@
   </div>
 </div>
 
-<!-- PAGE MESSAGERIE -->
-<div id="page-messagerie" class="page game-page">
+<!-- PAGE JOUEURS -->
+<div id="page-joueurs" class="page game-page">
   <div class="game-topbar">
     <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">💬 Messagerie</div>
+    <div class="game-topbar-title">🔍 Joueurs</div>
     <div></div>
   </div>
   <div class="game-content" style="justify-content:flex-start;padding-top:1.5rem;">
-    <div class="msg-section-title">Demandes d'amis reçues</div>
-    <div id="friend-requests-list" class="friend-list">
-      <div class="lb-loading">Aucune demande.</div>
+    <div class="players-search-bar">
+      <input type="text" id="player-search-input" class="bet-input players-search-input" placeholder="Rechercher un joueur par nom..." oninput="searchPlayers()"/>
+    </div>
+    <div id="players-list" class="players-list">
+      <div class="lb-loading">Tape un nom pour chercher un joueur.</div>
     </div>
   </div>
 </div>
 
-<!-- PAGE AMIS -->
-<div id="page-amis" class="page game-page">
+<!-- PAGE PROFIL JOUEUR -->
+<div id="page-profil" class="page game-page">
   <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">👥 Amis</div>
+    <button class="back-btn" onclick="goToPage('joueurs')">← Retour</button>
+    <div class="game-topbar-title">👤 Profil</div>
     <div></div>
   </div>
-  <div class="game-content" style="justify-content:flex-start;padding-top:1.5rem;">
-    <div class="msg-section-title">Mes amis</div>
-    <div id="friends-list" class="friend-list">
-      <div class="lb-loading">Aucun ami pour l'instant.</div>
+  <div class="game-content" style="justify-content:flex-start;padding-top:2rem;gap:1.5rem;">
+    <div class="profil-card">
+      <div class="profil-avatar-wrap">
+        <img id="profil-avatar" src="" alt="avatar" class="profil-avatar"/>
+        <span id="profil-online-dot" class="online-dot offline"></span>
+      </div>
+      <div class="profil-info">
+        <div id="profil-name" class="profil-name"></div>
+        <div id="profil-balance" class="profil-balance"></div>
+        <div id="profil-status" class="profil-status-label"></div>
+      </div>
+    </div>
+
+    <!-- ENVOYER VLX -->
+    <div class="profil-action-box">
+      <div class="profil-action-title">💸 Envoyer des VLX</div>
+      <div class="bet-row">
+        <input type="number" id="send-vlx-amount" class="bet-input" value="100" min="1" placeholder="Montant..."/>
+      </div>
+      <button class="btn-play" onclick="sendVLX()">💸 ENVOYER</button>
+    </div>
+
+    <!-- DÉFI MORPION -->
+    <div class="profil-action-box">
+      <div class="profil-action-title">🎮 Défi Morpion (3 manches)</div>
+      <div class="bet-row">
+        <input type="number" id="defi-bet-amount" class="bet-input" value="100" min="10" placeholder="Mise VLX (min 10)..."/>
+      </div>
+      <button class="btn-play btn-defi-profil" onclick="sendDefiFromProfil()">⚔️ ENVOYER LE DÉFI</button>
     </div>
   </div>
 </div>
@@ -372,25 +487,6 @@
       <button class="gin-refuse" onclick="refuseGameInvite()">❌ Refuser</button>
     </div>
     <div id="gin-timer-bar" class="gin-timer-bar"><div id="gin-timer-fill" class="gin-timer-fill"></div></div>
-  </div>
-</div>
-
-<!-- MODAL ENVOYER DEMANDE DE JEU -->
-<div id="game-invite-modal" class="admin-modal-overlay" style="display:none">
-  <div class="admin-modal">
-    <div class="admin-modal-title">🎮 Défi Morpion</div>
-    <div id="game-invite-target-name" class="admin-modal-user"></div>
-    <label class="bet-label" style="margin-top:.5rem">Manches</label>
-    <div class="morpion-manches-btns">
-      <button id="btn-3m" class="manche-btn active" onclick="selectManches(3)">3 manches</button>
-      <button id="btn-5m" class="manche-btn" onclick="selectManches(5)">5 manches</button>
-    </div>
-    <label class="bet-label" style="margin-top:.5rem">Mise VLX (chacun)</label>
-    <input type="number" id="game-invite-bet" class="bet-input" value="100" min="10" style="width:100%"/>
-    <div class="admin-modal-btns" style="margin-top:.5rem">
-      <button class="btn-admin-add" onclick="sendGameInvite()">🎮 Envoyer le défi</button>
-      <button class="btn-admin-close" onclick="closeGameInviteModal()">Annuler</button>
-    </div>
   </div>
 </div>
 
