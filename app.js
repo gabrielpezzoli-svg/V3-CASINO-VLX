@@ -171,6 +171,14 @@ function listenMyDoc() {
     }
     if (currentPage === "messagerie") renderFriendRequests();
     if (currentPage === "amis") renderFriends();
+    // Toast si nouvelle demande d'ami reçue
+    const newReqs = userData.friendRequests || [];
+    const prevReqs = window._prevFriendReqs || [];
+    if (newReqs.length > prevReqs.length) {
+      const newReq = newReqs.find(r => !prevReqs.some(p => p.uid === r.uid));
+      if (newReq) toast(`👥 ${newReq.name} vous a envoyé une demande d'ami ! Va dans Messagerie.`, "win");
+    }
+    window._prevFriendReqs = [...newReqs];
   });
 }
 
@@ -493,14 +501,50 @@ async function createNewTombola(){await setDoc(doc(db,"tombola","current"),{draw
 function startTombolaTimer(){clearInterval(tombolaTimerInterval);tombolaTimerInterval=setInterval(async()=>{if(!tombolaData)return;const remaining=tombolaData.drawAt-Date.now();const el=document.getElementById("tombola-timer");if(remaining<=0){clearInterval(tombolaTimerInterval);if(el)el.textContent="Tirage en cours...";await runTombolaDraw();}else{const h=Math.floor(remaining/3600000);const m=Math.floor((remaining%3600000)/60000);const s=Math.floor((remaining%60000)/1000);if(el)el.textContent=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;} },1000);}
 async function runTombolaDraw(){if(!tombolaData)return;const tickets=tombolaData.tickets||[];if(tickets.length===0){await setDoc(doc(db,"tombola","current"),{drawAt:Date.now()+24*60*60*1000,tickets:[],totalPot:0,createdAt:Date.now()});return;}const winner=tickets[Math.floor(Math.random()*tickets.length)];const pot=tombolaData.totalPot||0;await updateDoc(doc(db,"users",winner.uid),{balance:increment(pot)});await setDoc(doc(db,"tombola","current"),{drawAt:Date.now()+24*60*60*1000,tickets:[],totalPot:0,createdAt:Date.now()});if(winner.uid===currentUser?.uid){userData.balance+=pot;updateAllBalances();toast(`🎉 Vous avez gagné la tombola ! +${pot} VLX`,"win");}}
 function renderTombola(){if(!tombolaData)return;const pot=tombolaData.totalPot||0;const tickets=tombolaData.tickets||[];const potEl=document.getElementById("tombola-pot");if(potEl)potEl.textContent=pot.toLocaleString("fr-FR")+" VLX";const myTickets=tickets.filter(t=>t.uid===currentUser?.uid).length;const myEl=document.getElementById("tombola-my-tickets");if(myEl)myEl.innerHTML=`Vous avez <strong>${myTickets}</strong> ticket(s) — ${tickets.length} au total`;const partEl=document.getElementById("tombola-participants");if(!partEl)return;const counts={};tickets.forEach(t=>{if(!counts[t.uid])counts[t.uid]={name:t.name,count:0};counts[t.uid].count++;});const sorted=Object.entries(counts).sort((a,b)=>b[1].count-a[1].count).slice(0,10);partEl.innerHTML=sorted.length?`<div class="tombola-part-title">Participants</div>`+sorted.map(([uid,d])=>`<div class="tombola-part-row">${uid===currentUser?.uid?'<strong>Vous</strong>':d.name} <span>${d.count} ticket(s) — ${Math.round(d.count/tickets.length*100)}%</span></div>`).join(""):"";}
-window.buyTombolaTickets=async function(){if(!tombolaData||!currentUser)return;const qty=Math.max(1,parseInt(document.getElementById("tombola-qty").value)||1);const cost=qty*TICKET_PRICE;if(cost>userData.balance){toast("Solde insuffisant !","lose");return;}userData.balance-=cost;await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});const newTickets=Array(qty).fill(null).map(()=>({uid:currentUser.uid,name:userData.name||"Joueur"}));await updateDoc(doc(db,"tombola","current"),{tickets:arrayUnion(...newTickets),totalPot:increment(cost)});updateAllBalances();toast(`🎟️ ${qty} ticket(s) achetés pour ${cost} VLX !`,"win");};
+window.buyTombolaTickets=async function(){
+  if(!tombolaData||!currentUser)return;
+  const qty=Math.max(1,parseInt(document.getElementById("tombola-qty").value)||1);
+  const cost=qty*TICKET_PRICE;
+  if(cost>userData.balance){toast("Solde insuffisant !","lose");return;}
+  userData.balance-=cost;
+  await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});
+  // Chaque ticket a un id unique pour éviter la déduplication de arrayUnion
+  const newTickets=Array.from({length:qty},(_,i)=>({
+    uid:currentUser.uid,
+    name:userData.name||"Joueur",
+    _id:`${currentUser.uid}_${Date.now()}_${i}`
+  }));
+  await updateDoc(doc(db,"tombola","current"),{
+    tickets:arrayUnion(...newTickets),
+    totalPot:increment(cost)
+  });
+  updateAllBalances();
+  toast(`🎟️ ${qty} ticket(s) achetés pour ${cost} VLX !`,"win");
+};
 
 // ══════════════════════════════════════════════════════════════
 //  AMIS
 // ══════════════════════════════════════════════════════════════
 window.sendFriendRequest=async function(targetUid,targetName){if(!currentUser||targetUid===currentUser.uid)return;if((userData?.friends||[]).includes(targetUid)){toast("Vous êtes déjà amis !","");return;}const targetSnap=await getDoc(doc(db,"users",targetUid));if(!targetSnap.exists())return;const targetData=targetSnap.data();const alreadySent=(targetData.friendRequests||[]).some(r=>r.uid===currentUser.uid);if(alreadySent){toast("Demande déjà envoyée !","");return;}await updateDoc(doc(db,"users",targetUid),{friendRequests:arrayUnion({uid:currentUser.uid,name:userData.name||"Joueur",avatar:userData.avatar||""})});toast(`Demande envoyée à ${targetName} 👋`,"win");};
 function renderFriendRequests(){const list=document.getElementById("friend-requests-list");if(!list)return;const reqs=userData?.friendRequests||[];if(reqs.length===0){list.innerHTML='<div class="lb-loading">Aucune demande en attente.</div>';return;}list.innerHTML="";reqs.forEach(r=>{const e=document.createElement("div");e.className="friend-entry";e.innerHTML=`<div class="lb-avatar-wrap"><img class="lb-avatar" src="${r.avatar||''}" onerror="this.style.display='none'" alt=""></div><span class="lb-name">${r.name||"Joueur"}</span><div class="friend-btns"><button class="btn-accept-friend" onclick="acceptFriendRequest('${r.uid}','${(r.name||'').replace(/'/g,"\\'")}','${(r.avatar||'')}')">✅ Accepter</button><button class="btn-refuse-friend" onclick="refuseFriendRequest('${r.uid}','${(r.name||'').replace(/'/g,"\\'")}','${(r.avatar||'')}')">❌ Refuser</button></div>`;list.appendChild(e);});}
-window.acceptFriendRequest=async function(uid,name,avatar){if(!currentUser||!userData)return;const batch=writeBatch(db);const myRef=doc(db,"users",currentUser.uid);const reqToRemove=(userData.friendRequests||[]).find(r=>r.uid===uid);batch.update(myRef,{friends:arrayUnion(uid)});if(reqToRemove)batch.update(myRef,{friendRequests:arrayRemove(reqToRemove)});const theirRef=doc(db,"users",uid);batch.update(theirRef,{friends:arrayUnion(currentUser.uid)});await batch.commit();toast(`${name} est maintenant votre ami ! 🤝`,"win");};
+window.acceptFriendRequest=async function(uid,name,avatar){
+  if(!currentUser||!userData)return;
+  const batch=writeBatch(db);
+  const myRef=doc(db,"users",currentUser.uid);
+  // Retirer la demande de ma liste
+  const reqToRemove=(userData.friendRequests||[]).find(r=>r.uid===uid);
+  if(reqToRemove) batch.update(myRef,{friendRequests:arrayRemove(reqToRemove)});
+  // M'ajouter comme ami de l'autre
+  batch.update(myRef,{friends:arrayUnion(uid)});
+  const theirRef=doc(db,"users",uid);
+  batch.update(theirRef,{friends:arrayUnion(currentUser.uid)});
+  await batch.commit();
+  // Mettre à jour userData local immédiatement
+  userData.friends=[...(userData.friends||[]),uid];
+  userData.friendRequests=(userData.friendRequests||[]).filter(r=>r.uid!==uid);
+  toast(`${name} est maintenant votre ami ! 🤝`,"win");
+  renderFriendRequests();
+};
 window.refuseFriendRequest=async function(uid,name,avatar){if(!currentUser||!userData)return;const reqToRemove=(userData.friendRequests||[]).find(r=>r.uid===uid);if(!reqToRemove)return;await updateDoc(doc(db,"users",currentUser.uid),{friendRequests:arrayRemove(reqToRemove)});toast("Demande refusée.","");};
 async function renderFriends(){const list=document.getElementById("friends-list");if(!list)return;const friends=userData?.friends||[];if(friends.length===0){list.innerHTML='<div class="lb-loading">Aucun ami pour l\'instant.</div>';return;}list.innerHTML='<div class="lb-loading">Chargement...</div>';const results=await Promise.all(friends.map(uid=>getDoc(doc(db,"users",uid))));list.innerHTML="";results.forEach(snap=>{if(!snap.exists())return;const u=snap.data();const isOnline=u.online===true&&(Date.now()-(u.lastSeen||0))<60000;const e=document.createElement("div");e.className="friend-entry";e.innerHTML=`<div class="lb-avatar-wrap"><img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span class="online-dot ${isOnline?'online':'offline'}"></span></div><span class="lb-name">${u.name||"Joueur"}</span><div class="friend-btns">${isOnline?`<button class="btn-defi" onclick="openGameInviteModal('${u.uid}','${(u.name||'').replace(/'/g,"\\'")}')">🎮 Défi</button>`:'<span class="friend-offline-label">Hors ligne</span>'}</div>`;list.appendChild(e);});}
 
@@ -525,6 +569,36 @@ window.playMorpion=async function(idx){if(!morpionGameId)return;const snap=await
 function checkMorpionWinner(board){const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];for(const[a,b,c]of lines){if(board[a]&&board[a]===board[b]&&board[a]===board[c])return board[a];}return null;}
 async function finishMorpion(g){if(unsubMorpion){unsubMorpion();unsubMorpion=null;}const myScore=g.scores[currentUser.uid]||0;const oppScore=g.scores[morpionOppUid]||0;const prize=morpionBet*2;const st=document.getElementById("morpion-status");if(myScore>oppScore){if(st){st.textContent=`🏆 Victoire ! +${prize} VLX`;st.className="morpion-status win";}userData.balance+=prize;await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});updateAllBalances();toast(`🏆 Victoire au Morpion ! +${prize} VLX`,"win");}else if(myScore===oppScore){if(st){st.textContent="🤝 Égalité — mise remboursée";st.className="morpion-status";}userData.balance+=morpionBet;await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});updateAllBalances();toast("Égalité ! Mise remboursée.","");}else{if(st){st.textContent=`💀 Défaite — perdu ${morpionBet} VLX`;st.className="morpion-status lose";}toast(`Défaite au Morpion. -${morpionBet} VLX`,"lose");}morpionGameId=null;setTimeout(()=>{if(currentPage==="morpion")goToLobby();},3000);}
 window.quitMorpion=async function(){if(morpionGameId){const snap=await getDoc(doc(db,"morpion",morpionGameId));if(snap.exists()&&snap.data().status==="playing"){await updateDoc(doc(db,"morpion",morpionGameId),{status:"finished",forfeit:currentUser.uid,scores:{...snap.data().scores,[morpionOppUid]:99}});toast("Vous avez abandonné. Mise perdue.","lose");}if(unsubMorpion){unsubMorpion();unsubMorpion=null;}morpionGameId=null;}goToLobby();};
+
+// ══════════════════════════════════════════════════════════════
+//  MODIFIER LE BLAZE
+// ══════════════════════════════════════════════════════════════
+window.openEditName = function() {
+  const modal = document.getElementById("edit-name-modal");
+  const input = document.getElementById("edit-name-input");
+  if (!modal || !input) return;
+  input.value = userData?.name || "";
+  modal.style.display = "flex";
+  setTimeout(() => input.focus(), 100);
+};
+
+window.closeEditName = function() {
+  const modal = document.getElementById("edit-name-modal");
+  if (modal) modal.style.display = "none";
+};
+
+window.saveEditName = async function() {
+  const input = document.getElementById("edit-name-input");
+  if (!input || !currentUser || !userData) return;
+  const newName = input.value.trim();
+  if (!newName || newName.length < 2) { toast("Nom trop court (min 2 caractères)", "lose"); return; }
+  if (newName.length > 20) { toast("Nom trop long (max 20 caractères)", "lose"); return; }
+  await updateDoc(doc(db, "users", currentUser.uid), { name: newName });
+  userData.name = newName;
+  document.getElementById("lobby-username").textContent = newName;
+  closeEditName();
+  toast(`Blaze mis à jour : ${newName} ✅`, "win");
+};
 
 // ══════════════════════════════════════════════════════════════
 //  UTILS
