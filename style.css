@@ -468,3 +468,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 /* ══ DÉFI BUTTONS ═══════════════════════════════════════════ */
 .btn-defi-morpion { background: linear-gradient(135deg,#7c3aed,#4c1d95) !important; color:#fff !important; }
 .btn-defi-bj { background: linear-gradient(135deg,#1a6fb5,#0a3060) !important; color:#fff !important; }
+
+/* ══ PLINKO ══════════════════════════════════════════════════ */
+.plinko-content { gap: 1rem !important; padding-top: 1rem !important; }
+.plinko-arena {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#plinko-canvas {
+  border-radius: 12px;
+  border: 1px solid rgba(212,160,23,.25);
+  box-shadow: 0 0 40px rgba(168,85,247,.2), 0 15px 60px rgba(0,0,0,.8);
+  display: block;
+  max-width: min(420px, calc(100vw - 2rem));
+}
+.plinko-multipliers {
+  display: flex;
+  gap: 3px;
+  width: min(420px, calc(100vw - 2rem));
+  justify-content: center;
+}
+.plinko-mult {
+  flex: 1;
+  text-align: center;
+  font-family: var(--ff-mono);
+  font-size: clamp(.55rem, 1.8vw, .75rem);
+  font-weight: 700;
+  padding: .3rem .1rem;
+  border-radius: 4px;
+  border: 1px solid;
+  letter-spacing: -.02em;
+}
