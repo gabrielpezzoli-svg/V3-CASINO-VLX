@@ -6,7 +6,7 @@ import {
 } from "./firebase-config.js";
 
 import {
-  getDocs, deleteDoc, arrayUnion, arrayRemove, increment, writeBatch
+  getDocs, deleteDoc, arrayUnion, arrayRemove, increment, writeBatch, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let currentUser = null;
@@ -17,7 +17,6 @@ let unsubMorpion = null;
 let currentPage = "login";
 let pendingGameInvite = null;
 let ginAutoClose = null;
-let selectedManches = 3;
 let morpionGameId = null;
 let morpionMySymbol = "";
 let morpionOppUid = "";
@@ -26,6 +25,10 @@ let morpionManches = 3;
 let tombolaUnsub = null;
 let tombolaTimerInterval = null;
 let tombolaData = null;
+
+// Profil cible courant (page profil joueur)
+let profilTargetUid = null;
+let profilTargetData = null;
 
 // ══════════════════════════════════════════════════════════════
 //  TOAST
@@ -54,17 +57,16 @@ window.goToGame = function(game) {
   if (game === "leaderboard") renderLeaderboard();
   if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
-  if (game === "joueurs") { showPage("joueurs"); document.getElementById("player-search-input").value=""; document.getElementById("players-list").innerHTML='<div class="lb-loading">Tape un nom pour chercher.</div>'; return; }
+  if (game === "joueurs") initJoueurs();
   if (game === "roulette") {
     showPage("roulette");
     setTimeout(() => {
-      ballTrackR = 0.88;
+      ballTrack = 0.88;
       ballAngle = -Math.PI / 2;
       drawRoulette(rouletteAngle);
     }, 50);
     return;
   }
-  if (game === "plinko") { showPage("plinko"); setTimeout(initPlinko, 50); return; }
   showPage(game);
 };
 
@@ -76,7 +78,7 @@ window.goToLobby = function() {
 function updateAllBalances() {
   if (!userData) return;
   const bal = (userData.balance || 0).toLocaleString("fr-FR") + " VLX";
-  ["dice", "mines", "coinflip", "tombola", "morpion", "roulette", "slots", "blackjack", "bjmulti", "plinko"].forEach(id => {
+  ["dice", "mines", "coinflip", "tombola", "morpion", "roulette", "slots", "blackjack"].forEach(id => {
     const el = document.getElementById(id + "-balance");
     if (el) el.textContent = bal;
   });
@@ -106,7 +108,7 @@ onAuthStateChanged(auth, async user => {
     if (!userData) return;
     await updateDoc(doc(db, "users", user.uid), { online: true, lastSeen: Date.now() });
     document.getElementById("user-avatar").src = user.photoURL || "";
-    document.getElementById("lobby-username").textContent = user.displayName || "";
+    document.getElementById("lobby-username").textContent = userData.name || user.displayName || "";
     startLeaderboard();
     listenMyDoc();
     showPage("lobby");
@@ -129,8 +131,7 @@ async function loadOrCreateUser(user) {
     const u = {
       uid: user.uid, name: user.displayName || "Joueur",
       avatar: user.photoURL || "", balance: 1500, gamesPlayed: 0,
-      lastBonus: 0, createdAt: Date.now(), online: true, lastSeen: Date.now(),
-      friends: [], friendRequests: []
+      lastBonus: 0, createdAt: Date.now(), online: true, lastSeen: Date.now()
     };
     await setDoc(ref, u); userData = u;
   } else {
@@ -154,7 +155,7 @@ function listenMyDoc() {
     if (!snap.exists()) return;
     userData = snap.data();
     updateAllBalances();
-    updateBadges();
+    // Détecter invite de jeu
     const inv = userData.pendingGameInvite;
     if (inv && inv.from !== currentUser.uid) {
       const age = Date.now() - inv.sentAt;
@@ -169,29 +170,7 @@ function listenMyDoc() {
         startMorpion(gid, g.players[0], g.players[1], g.bet, g.manches);
       });
     }
-    if (currentPage === "messagerie") renderFriendRequests();
-    if (currentPage === "amis") renderFriends();
-    // Toast si nouvelle demande d'ami reçue
-    const newReqs = userData.friendRequests || [];
-    const prevReqs = window._prevFriendReqs || [];
-    if (newReqs.length > prevReqs.length) {
-      const newReq = newReqs.find(r => !prevReqs.some(p => p.uid === r.uid));
-      if (newReq) toast(`👥 ${newReq.name} vous a envoyé une demande d'ami ! Va dans Messagerie.`, "win");
-    }
-    window._prevFriendReqs = [...newReqs];
   });
-}
-
-function updateBadges() {
-  const reqs = userData?.friendRequests || [];
-  const badge = document.getElementById("friend-req-badge");
-  if (badge) { badge.textContent = reqs.length; badge.style.display = reqs.length > 0 ? "flex" : "none"; }
-  const inv = userData?.pendingGameInvite;
-  const gameBadge = document.getElementById("game-req-badge");
-  if (gameBadge) {
-    const hasInv = inv && inv.from !== currentUser?.uid && (Date.now() - inv.sentAt) < 60000;
-    gameBadge.textContent = "1"; gameBadge.style.display = hasInv ? "flex" : "none";
-  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -210,40 +189,22 @@ function parseBet(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  ROULETTE — 37 CASES (18 rouge, 18 noir, 1 vert)
+//  ROULETTE — 37 CASES
 // ══════════════════════════════════════════════════════════════
 const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
-
 function rouletteColor(n) {
   if (n === 0) return "green";
   const reds = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
   return reds.has(n) ? "red" : "black";
 }
-
-const SLOT_COUNT = 37;
-const SLOT_ANGLE = (2 * Math.PI) / SLOT_COUNT;
-const TAU = 2 * Math.PI;
-
-let rouletteAngle    = 0;   // angle actuel de la roue
-let rouletteSpinning = false;
-let rouletteSelectedColor = null;
-// ballAngle : angle ABSOLU de la bille dans le repère fixe du canvas
-// On le stocke en offset PAR RAPPORT à la roue pour qu'elle suive visuellement
-let ballWheelOffset = 0;    // offset de la bille par rapport à la roue
-let ballVisible     = false;
-let ballTrackR      = 0.74; // rayon relatif (dans la piste)
-
-const ROUL_COLORS = {
-  green: { fill:"#1a5c1a", text:"#fff" },
-  red:   { fill:"#7a0000", text:"#fff" },
-  black: { fill:"#1a1a1a", text:"#ddd" }
-};
+const SLOT_COUNT = 37, SLOT_ANGLE = (2 * Math.PI) / 37, TAU = 2 * Math.PI;
+let rouletteAngle = 0, rouletteSpinning = false, rouletteSelectedColor = null;
+let ballWheelOffset = 0, ballVisible = false, ballTrackR = 0.74;
+const ROUL_COLORS = { green:{fill:"#1a5c1a",text:"#fff"}, red:{fill:"#7a0000",text:"#fff"}, black:{fill:"#1a1a1a",text:"#ddd"} };
 
 window.selectRouletteColor = function(color) {
   rouletteSelectedColor = color;
-  ["red","green","black"].forEach(c => {
-    document.getElementById("rb-" + c)?.classList.toggle("selected", c === color);
-  });
+  ["red","green","black"].forEach(c => document.getElementById("rb-"+c)?.classList.toggle("selected",c===color));
   const btn = document.getElementById("roulette-spin-btn");
   if (btn) { btn.disabled = false; btn.textContent = "🎡 LANCER"; }
 };
@@ -251,202 +212,96 @@ window.selectRouletteColor = function(color) {
 function drawRoulette(angle) {
   const canvas = document.getElementById("roulette-canvas");
   if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  const cx = W/2, cy = H/2;
-  const R  = Math.min(cx, cy) - 6;
-  const Ri = R * 0.26;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // Ombre dorée
-  ctx.save();
-  ctx.shadowColor = "rgba(212,160,23,0.5)";
-  ctx.shadowBlur  = 28;
-  ctx.beginPath(); ctx.arc(cx, cy, R+3, 0, TAU);
-  ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 3; ctx.stroke();
-  ctx.restore();
-
-  // Cases
-  WHEEL_ORDER.forEach((num, i) => {
-    const startA = angle + i * SLOT_ANGLE - SLOT_ANGLE/2;
-    const endA   = startA + SLOT_ANGLE;
-    const col    = rouletteColor(num);
-    ctx.beginPath(); ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, R, startA, endA); ctx.closePath();
-    ctx.fillStyle   = ROUL_COLORS[col].fill; ctx.fill();
-    ctx.strokeStyle = "#0a0a0f"; ctx.lineWidth = 1.2; ctx.stroke();
-    // Numéro
-    const midA = startA + SLOT_ANGLE/2;
-    const tx = cx + R*0.74*Math.cos(midA), ty = cy + R*0.74*Math.sin(midA);
-    ctx.save(); ctx.translate(tx, ty); ctx.rotate(midA + Math.PI/2);
-    ctx.fillStyle = ROUL_COLORS[col].text;
-    ctx.font = `bold ${R < 140 ? 8 : 10}px 'DM Mono',monospace`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(String(num), 0, 0); ctx.restore();
+  const ctx = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2, R = Math.min(cx,cy)-6, Ri = R*0.26;
+  ctx.clearRect(0,0,W,H);
+  ctx.save(); ctx.shadowColor="rgba(212,160,23,0.5)"; ctx.shadowBlur=28;
+  ctx.beginPath(); ctx.arc(cx,cy,R+3,0,TAU); ctx.strokeStyle="#d4a017"; ctx.lineWidth=3; ctx.stroke(); ctx.restore();
+  WHEEL_ORDER.forEach((num,i)=>{
+    const startA=angle+i*SLOT_ANGLE-SLOT_ANGLE/2, endA=startA+SLOT_ANGLE, col=rouletteColor(num);
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,startA,endA); ctx.closePath();
+    ctx.fillStyle=ROUL_COLORS[col].fill; ctx.fill(); ctx.strokeStyle="#0a0a0f"; ctx.lineWidth=1.2; ctx.stroke();
+    const midA=startA+SLOT_ANGLE/2, tx=cx+R*0.74*Math.cos(midA), ty=cy+R*0.74*Math.sin(midA);
+    ctx.save(); ctx.translate(tx,ty); ctx.rotate(midA+Math.PI/2); ctx.fillStyle=ROUL_COLORS[col].text;
+    ctx.font=`bold ${R<140?8:10}px 'DM Mono',monospace`; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(String(num),0,0); ctx.restore();
   });
-
-  // Anneau + picots dorés
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU);
-  ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 5; ctx.stroke();
-  for (let i = 0; i < SLOT_COUNT; i++) {
-    const a = angle + i * SLOT_ANGLE;
-    ctx.beginPath();
-    ctx.moveTo(cx+(R-8)*Math.cos(a), cy+(R-8)*Math.sin(a));
-    ctx.lineTo(cx+(R+1)*Math.cos(a), cy+(R+1)*Math.sin(a));
-    ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 2; ctx.stroke();
-  }
-
-  // Centre
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Ri);
-  grad.addColorStop(0, "#2a2a3a"); grad.addColorStop(1, "#0f0f18");
-  ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, TAU);
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.strokeStyle = "#d4a017"; ctx.lineWidth = 2.5; ctx.stroke();
-  ctx.fillStyle = "#d4a017";
-  ctx.font = `bold ${R < 140 ? 13 : 17}px 'Playfair Display',serif`;
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("VLX", cx, cy);
-
-  // Bille — suit la roue via ballWheelOffset
-  if (ballVisible) {
-    const bAngle = angle + ballWheelOffset;
-    const bR = R * ballTrackR;
-    const bx = cx + bR * Math.cos(bAngle);
-    const by = cy + bR * Math.sin(bAngle);
-    const br = R * 0.048;
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.9)"; ctx.shadowBlur = 12;
-    const rg = ctx.createRadialGradient(bx-br*0.35, by-br*0.35, br*0.05, bx, by, br);
-    rg.addColorStop(0, "#fff"); rg.addColorStop(0.5, "#ddd"); rg.addColorStop(1, "#888");
-    ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU);
-    ctx.fillStyle = rg; ctx.fill(); ctx.restore();
-  }
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,TAU); ctx.strokeStyle="#d4a017"; ctx.lineWidth=5; ctx.stroke();
+  for(let i=0;i<SLOT_COUNT;i++){const a=angle+i*SLOT_ANGLE;ctx.beginPath();ctx.moveTo(cx+(R-8)*Math.cos(a),cy+(R-8)*Math.sin(a));ctx.lineTo(cx+(R+1)*Math.cos(a),cy+(R+1)*Math.sin(a));ctx.strokeStyle="#d4a017";ctx.lineWidth=2;ctx.stroke();}
+  const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,Ri);
+  grad.addColorStop(0,"#2a2a3a"); grad.addColorStop(1,"#0f0f18");
+  ctx.beginPath(); ctx.arc(cx,cy,Ri,0,TAU); ctx.fillStyle=grad; ctx.fill(); ctx.strokeStyle="#d4a017"; ctx.lineWidth=2.5; ctx.stroke();
+  ctx.fillStyle="#d4a017"; ctx.font=`bold ${R<140?13:17}px 'Playfair Display',serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("VLX",cx,cy);
+  if(ballVisible){const bAngle=angle+ballWheelOffset,bR=R*ballTrackR,bx=cx+bR*Math.cos(bAngle),by=cy+bR*Math.sin(bAngle),br=R*0.048;
+    ctx.save(); ctx.shadowColor="rgba(0,0,0,0.9)"; ctx.shadowBlur=12;
+    const rg=ctx.createRadialGradient(bx-br*0.35,by-br*0.35,br*0.05,bx,by,br);
+    rg.addColorStop(0,"#fff"); rg.addColorStop(0.5,"#ddd"); rg.addColorStop(1,"#888");
+    ctx.beginPath(); ctx.arc(bx,by,br,0,TAU); ctx.fillStyle=rg; ctx.fill(); ctx.restore();}
 }
 
-function easeOutRoulette(t) { return 1 - Math.pow(1 - t, 4); }
+function easeOutRoulette(t){return 1-Math.pow(1-t,4);}
 
 window.spinRoulette = async function() {
-  if (rouletteSpinning) return;
-  if (!rouletteSelectedColor) { toast("Choisis une couleur d'abord !", "lose"); return; }
-  const bet = parseBet("roulette-bet"); if (bet === null) return;
-
-  rouletteSpinning = true;
-  ballVisible = false;
-  document.getElementById("roulette-spin-btn").disabled = true;
-  document.getElementById("roulette-result-box").style.visibility = "hidden";
-
-  // ── Tirage ──────────────────────────────────────────────────
-  const result      = WHEEL_ORDER[Math.floor(Math.random() * SLOT_COUNT)];
-  const resultColor = rouletteColor(result);
-  const winIdx      = WHEEL_ORDER.indexOf(result);
-
-  // ── Angle final de la roue ───────────────────────────────────
-  // On veut que le CENTRE de la case winIdx soit à -PI/2 (haut).
-  // Centre de la case i dans le repère roue = i * SLOT_ANGLE
-  // On veut : rouletteAngle_final + winIdx * SLOT_ANGLE = -PI/2  (mod TAU)
-  // => rouletteAngle_final = -PI/2 - winIdx * SLOT_ANGLE  (mod TAU)
-  const TARGET_ABS = -Math.PI / 2 - winIdx * SLOT_ANGLE;
-  // Calculer combien tourner depuis rouletteAngle pour atteindre TARGET_ABS
-  const turns = 8;
-  const diff  = ((TARGET_ABS - rouletteAngle) % TAU + TAU) % TAU; // toujours positif
-  const targetAngle = rouletteAngle + diff + turns * TAU;
-
-  const startAngle = rouletteAngle;
-  const duration   = 5000;
-  const startTime  = performance.now();
-
-  function animate(now) {
-    const t = Math.min((now - startTime) / duration, 1);
-    rouletteAngle = startAngle + (targetAngle - startAngle) * easeOutRoulette(t);
+  if(rouletteSpinning) return;
+  if(!rouletteSelectedColor){toast("Choisis une couleur d'abord !","lose");return;}
+  const bet=parseBet("roulette-bet"); if(bet===null) return;
+  rouletteSpinning=true; ballVisible=false;
+  document.getElementById("roulette-spin-btn").disabled=true;
+  document.getElementById("roulette-result-box").style.visibility="hidden";
+  const result=WHEEL_ORDER[Math.floor(Math.random()*SLOT_COUNT)], resultColor=rouletteColor(result), winIdx=WHEEL_ORDER.indexOf(result);
+  const TARGET_ABS=-Math.PI/2-winIdx*SLOT_ANGLE, turns=8;
+  const diff=((TARGET_ABS-rouletteAngle)%TAU+TAU)%TAU, targetAngle=rouletteAngle+diff+turns*TAU;
+  const startAngle=rouletteAngle, duration=5000, startTime=performance.now();
+  function animate(now){
+    const t=Math.min((now-startTime)/duration,1);
+    rouletteAngle=startAngle+(targetAngle-startAngle)*easeOutRoulette(t);
     drawRoulette(rouletteAngle);
-    if (t < 1) {
-      requestAnimationFrame(animate);
-    } else {
-      // ── Animation finie : placer la bille exactement sur la case ──
-      rouletteAngle = targetAngle;
-      // ballWheelOffset = angle de la case dans le repère roue = winIdx * SLOT_ANGLE
-      // mais la bille est dans le repère fixe, donc :
-      // bAngle_fixe = rouletteAngle + ballWheelOffset = -PI/2 (centre de la case)
-      // => ballWheelOffset = -PI/2 - rouletteAngle
-      ballWheelOffset = -Math.PI / 2 - rouletteAngle;
-      ballTrackR  = 0.74;
-      ballVisible = true;
-      drawRoulette(rouletteAngle);
-      endSpinRoulette(result, resultColor, bet);
-    }
+    if(t<1){requestAnimationFrame(animate);}
+    else{rouletteAngle=targetAngle;ballWheelOffset=-Math.PI/2-rouletteAngle;ballTrackR=0.74;ballVisible=true;drawRoulette(rouletteAngle);endSpinRoulette(result,resultColor,bet);}
   }
   requestAnimationFrame(animate);
 };
 
-async function endSpinRoulette(result, resultColor, bet) {
-  const won = resultColor === rouletteSelectedColor;
-  const mult = resultColor === "green" ? 20 : 2;
-  const gain = won ? bet * mult - bet : -bet;
-  userData.balance = Math.max(0, userData.balance + gain);
-  userData.gamesPlayed++;
-  await saveUserData();
-
-  const box = document.getElementById("roulette-result-box");
-  const numEl = document.getElementById("roulette-result-num");
-  const lblEl = document.getElementById("roulette-result-label");
-  box.style.visibility = "visible";
-  numEl.textContent = result;
-  numEl.style.color = resultColor === "green" ? "#2ecc71" : resultColor === "red" ? "#e74c3c" : "#aaa";
-  if (won) {
-    lblEl.textContent = `+${bet * mult} VLX (×${mult}) 🎉`;
-    lblEl.style.color = "#27ae60";
-    toast(`${result} ${resultColor === "green" ? "🟢 VERT" : resultColor === "red" ? "🔴 ROUGE" : "⚫ NOIR"} ! +${bet*mult} VLX 🎉`, "win");
-  } else {
-    const colorName = resultColor === "green" ? "🟢 VERT" : resultColor === "red" ? "🔴 ROUGE" : "⚫ NOIR";
-    lblEl.textContent = `${colorName} — Perdu ${bet} VLX`;
-    lblEl.style.color = "#e74c3c";
-    toast(`${result} — Perdu ${bet} VLX`, "lose");
-  }
-  rouletteSpinning = false;
-  const btn = document.getElementById("roulette-spin-btn");
-  if (btn) { btn.disabled = false; btn.textContent = "🎡 LANCER"; }
+async function endSpinRoulette(result,resultColor,bet){
+  const won=resultColor===rouletteSelectedColor, mult=resultColor==="green"?20:2, gain=won?bet*mult-bet:-bet;
+  userData.balance=Math.max(0,userData.balance+gain); userData.gamesPlayed++; await saveUserData();
+  const box=document.getElementById("roulette-result-box"), numEl=document.getElementById("roulette-result-num"), lblEl=document.getElementById("roulette-result-label");
+  box.style.visibility="visible"; numEl.textContent=result;
+  numEl.style.color=resultColor==="green"?"#2ecc71":resultColor==="red"?"#e74c3c":"#aaa";
+  if(won){lblEl.textContent=`+${bet*mult} VLX (×${mult}) 🎉`;lblEl.style.color="#27ae60";toast(`${result} ${resultColor==="green"?"🟢 VERT":resultColor==="red"?"🔴 ROUGE":"⚫ NOIR"} ! +${bet*mult} VLX 🎉`,"win");}
+  else{const cn=resultColor==="green"?"🟢 VERT":resultColor==="red"?"🔴 ROUGE":"⚫ NOIR";lblEl.textContent=`${cn} — Perdu ${bet} VLX`;lblEl.style.color="#e74c3c";toast(`${result} — Perdu ${bet} VLX`,"lose");}
+  rouletteSpinning=false;
+  const btn=document.getElementById("roulette-spin-btn"); if(btn){btn.disabled=false;btn.textContent="🎡 LANCER";}
 }
 
 // ══════════════════════════════════════════════════════════════
 //  DICE
 // ══════════════════════════════════════════════════════════════
-let diceTarget = 50, diceDirection = "under", diceRolling = false;
-function diceWinChance() { return diceDirection === "under" ? (diceTarget-1)/100 : (100-diceTarget)/100; }
-function diceMultiplier() { const c=diceWinChance(); return c<=0?0:Math.round((0.98/c)*100)/100; }
-function updateDiceUI() {
-  document.getElementById("dice-target-display").textContent = diceTarget;
-  document.getElementById("dice-mult-display").textContent = "×"+diceMultiplier().toFixed(2);
+let diceTarget=50, diceDirection="under", diceRolling=false;
+function diceWinChance(){return diceDirection==="under"?(diceTarget-1)/100:(100-diceTarget)/100;}
+function diceMultiplier(){const c=diceWinChance();return c<=0?0:Math.round((0.98/c)*100)/100;}
+function updateDiceUI(){
+  document.getElementById("dice-target-display").textContent=diceTarget;
+  document.getElementById("dice-mult-display").textContent="×"+diceMultiplier().toFixed(2);
   const bar=document.getElementById("dice-bar-win");
   if(diceDirection==="under"){bar.style.left="0%";bar.style.width=(diceTarget-1)+"%";bar.style.borderRadius="22px 0 0 22px";}
   else{bar.style.left=diceTarget+"%";bar.style.width=(100-diceTarget)+"%";bar.style.borderRadius="0 22px 22px 0";}
 }
-window.adjustTarget = d => { diceTarget=Math.max(2,Math.min(98,diceTarget+d)); updateDiceUI(); };
-window.setDirection = dir => {
-  diceDirection=dir;
-  document.getElementById("dir-under").classList.toggle("active",dir==="under");
-  document.getElementById("dir-over").classList.toggle("active",dir==="over");
-  updateDiceUI();
-};
-window.rollDice = async function() {
-  if(diceRolling) return;
-  const bet=parseBet("dice-bet"); if(!bet) return;
+window.adjustTarget=d=>{diceTarget=Math.max(2,Math.min(98,diceTarget+d));updateDiceUI();};
+window.setDirection=dir=>{diceDirection=dir;document.getElementById("dir-under").classList.toggle("active",dir==="under");document.getElementById("dir-over").classList.toggle("active",dir==="over");updateDiceUI();};
+window.rollDice=async function(){
+  if(diceRolling)return;const bet=parseBet("dice-bet");if(!bet)return;
   if(diceWinChance()<=0){toast("Zone impossible !","lose");return;}
-  diceRolling=true; document.getElementById("dice-roll-btn").disabled=true;
+  diceRolling=true;document.getElementById("dice-roll-btn").disabled=true;
   const result=Math.floor(Math.random()*100)+1;
   const marker=document.getElementById("dice-bar-marker");
   marker.style.display="block";marker.style.transition="none";marker.style.left="0%";
-  await delay(50);
-  marker.style.transition="left 0.9s cubic-bezier(.25,.8,.25,1)";marker.style.left=result+"%";
+  await delay(50);marker.style.transition="left 0.9s cubic-bezier(.25,.8,.25,1)";marker.style.left=result+"%";
   await delay(1000);
-  const won=diceDirection==="under"?result<diceTarget:result>diceTarget;
-  const mult=diceMultiplier();
-  userData.balance=Math.max(0,userData.balance+(won?Math.round(bet*mult)-bet:-bet));userData.gamesPlayed++;
-  await saveUserData();
-  const rolledEl=document.getElementById("dice-rolled");
-  rolledEl.textContent=result;rolledEl.className="dice-rolled "+(won?"win":"lose");
-  const barWin=document.getElementById("dice-bar-win");
-  barWin.style.background=won?"linear-gradient(90deg,var(--green),#2ecc71)":"linear-gradient(90deg,var(--red),var(--red2))";
+  const won=diceDirection==="under"?result<diceTarget:result>diceTarget, mult=diceMultiplier();
+  userData.balance=Math.max(0,userData.balance+(won?Math.round(bet*mult)-bet:-bet));userData.gamesPlayed++;await saveUserData();
+  const rolledEl=document.getElementById("dice-rolled");rolledEl.textContent=result;rolledEl.className="dice-rolled "+(won?"win":"lose");
+  const barWin=document.getElementById("dice-bar-win");barWin.style.background=won?"linear-gradient(90deg,var(--green),#2ecc71)":"linear-gradient(90deg,var(--red),var(--red2))";
   setTimeout(()=>{barWin.style.background="linear-gradient(90deg,var(--green),#2ecc71)";},1500);
   toast(won?`Gagné ! +${Math.round(bet*mult)} VLX (×${mult.toFixed(2)}) 🎉`:`Perdu ${bet} VLX — résultat : ${result}`,won?"win":"lose");
   await delay(400);diceRolling=false;document.getElementById("dice-roll-btn").disabled=false;
@@ -455,8 +310,8 @@ window.rollDice = async function() {
 // ══════════════════════════════════════════════════════════════
 //  MINES
 // ══════════════════════════════════════════════════════════════
-const GRID_SIZE=25,MINE_COUNT=5;
-let minesActive=false,minesBet=0,minesGrid=[],safeRevealed=0;
+const GRID_SIZE=25, MINE_COUNT=5;
+let minesActive=false, minesBet=0, minesGrid=[], safeRevealed=0;
 function getMinesMultiplier(safe){const t=[1,1.18,1.40,1.68,2.05,2.55,3.25,4.25,5.70,8.0,12,19,33,65,156,500,2000,10000,50000,250000];return t[Math.min(safe,t.length-1)];}
 window.startMines=function(){const bet=parseBet("mines-bet");if(!bet)return;minesBet=bet;safeRevealed=0;minesActive=true;userData.balance-=bet;updateAllBalances();const pos=Array.from({length:GRID_SIZE},(_,i)=>i);shuffle(pos);minesGrid=Array(GRID_SIZE).fill(false);for(let i=0;i<MINE_COUNT;i++)minesGrid[pos[i]]=true;renderMinesGrid();updateMinesInfo();document.getElementById("mines-start-btn").disabled=true;document.getElementById("mines-cashout-btn").disabled=true;document.getElementById("mines-bet").disabled=true;};
 window.cashoutMines=async function(){if(!minesActive||safeRevealed<2)return;const mult=getMinesMultiplier(safeRevealed),win=Math.round(minesBet*mult);userData.balance+=win;userData.gamesPlayed++;minesActive=false;await saveUserData();toast(`Cashout ! +${win} VLX (×${mult.toFixed(2)}) 💰`,"win");revealAllMines();resetMinesButtons();};
@@ -469,21 +324,463 @@ function resetMinesButtons(){document.getElementById("mines-start-btn").disabled
 // ══════════════════════════════════════════════════════════════
 //  COINFLIP
 // ══════════════════════════════════════════════════════════════
-let chosenSide=null,coinFlipping=false;
+let chosenSide=null, coinFlipping=false;
 window.chooseSide=function(side){if(coinFlipping)return;chosenSide=side;document.getElementById("choose-blue").classList.toggle("selected",side==="blue");document.getElementById("choose-red").classList.toggle("selected",side==="red");document.getElementById("coinflip-btn").disabled=false;};
 window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;userData.balance=Math.max(0,userData.balance+(won?bet:-bet));userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
 
 // ══════════════════════════════════════════════════════════════
+//  MACHINE À SOUS (SLOTS)
+// ══════════════════════════════════════════════════════════════
+const SLOT_SYMBOLS = ["🍒","🍋","🍊","🔔","💎","7️⃣"];
+let slotsSpinning = false;
+
+function initSlots() {
+  for (let i = 0; i < 3; i++) {
+    const strip = document.getElementById("strip-" + i);
+    if (!strip) return;
+    strip.innerHTML = "";
+    // Remplir chaque reel avec des symboles
+    for (let j = 0; j < 20; j++) {
+      const div = document.createElement("div");
+      div.className = "reel-symbol";
+      div.textContent = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
+      strip.appendChild(div);
+    }
+    // Position initiale : montrer symbol[0]
+    strip.style.transform = "translateY(0px)";
+  }
+}
+
+window.spinSlots = async function() {
+  if (slotsSpinning) return;
+  const bet = parseBet("slots-bet"); if (!bet) return;
+  slotsSpinning = true;
+  const btn = document.getElementById("slots-spin-btn");
+  btn.disabled = true;
+  document.getElementById("slots-result-msg").textContent = "";
+  document.getElementById("slots-result-msg").className = "slots-result-msg";
+
+  userData.balance -= bet;
+  updateAllBalances();
+
+  // Choisir le résultat final pour chaque reel
+  const results = [
+    Math.floor(Math.random() * SLOT_SYMBOLS.length),
+    Math.floor(Math.random() * SLOT_SYMBOLS.length),
+    Math.floor(Math.random() * SLOT_SYMBOLS.length)
+  ];
+
+  // Animer chaque reel avec décalage
+  const animPromises = results.map((finalIdx, reelIdx) => {
+    return new Promise(resolve => {
+      const strip = document.getElementById("strip-" + reelIdx);
+      const symbolHeight = 90;
+      const totalSymbols = 20;
+
+      // Regénérer le strip avec le résultat final à la position centrale
+      strip.innerHTML = "";
+      const symbols = [];
+      for (let j = 0; j < totalSymbols; j++) {
+        symbols.push(SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]);
+      }
+      // Forcer le résultat à la position d'affichage (index 10)
+      symbols[10] = SLOT_SYMBOLS[finalIdx];
+      symbols.forEach(s => {
+        const div = document.createElement("div");
+        div.className = "reel-symbol";
+        div.textContent = s;
+        strip.appendChild(div);
+      });
+
+      // Partir de 0, animer jusqu'à la position cible
+      strip.style.transition = "none";
+      strip.style.transform = "translateY(0px)";
+
+      const targetY = -(10 * symbolHeight); // centrer sur index 10
+      const spinDuration = 800 + reelIdx * 400; // décalage progressif
+
+      setTimeout(() => {
+        strip.style.transition = `transform ${spinDuration}ms cubic-bezier(.17,.67,.35,1.0)`;
+        strip.style.transform = `translateY(${targetY}px)`;
+        setTimeout(resolve, spinDuration + 50);
+      }, 50);
+    });
+  });
+
+  await Promise.all(animPromises);
+
+  // Calculer résultat
+  const finalSymbols = results.map(i => SLOT_SYMBOLS[i]);
+  const counts = {};
+  finalSymbols.forEach(s => { counts[s] = (counts[s] || 0) + 1; });
+  const maxCount = Math.max(...Object.values(counts));
+
+  const msgEl = document.getElementById("slots-result-msg");
+  let gain = 0;
+
+  if (maxCount === 3) {
+    gain = Math.round(bet * 2.5);
+    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — JACKPOT ! +${gain} VLX 🎉`;
+    msgEl.className = "slots-result-msg win3";
+    toast(`JACKPOT 🎰 ! +${gain} VLX (×2.5) 🎉`, "win");
+  } else if (maxCount === 2) {
+    gain = Math.round(bet * 1.5);
+    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×1.5)`;
+    msgEl.className = "slots-result-msg win2";
+    toast(`Deux pareils ! +${gain} VLX (×1.5)`, "win");
+  } else {
+    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — Pas de chance...`;
+    msgEl.className = "slots-result-msg lose";
+    toast(`Perdu ${bet} VLX`, "lose");
+  }
+
+  userData.balance += gain;
+  userData.gamesPlayed++;
+  await saveUserData();
+
+  slotsSpinning = false;
+  btn.disabled = false;
+};
+
+// ══════════════════════════════════════════════════════════════
+//  BLACKJACK
+// ══════════════════════════════════════════════════════════════
+const BJ_SUITS = ["♠","♥","♦","♣"];
+const BJ_VALUES = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+let bjDeck = [], bjPlayerHand = [], bjDealerHand = [], bjBet = 0, bjPlaying = false;
+
+function bjCreateDeck() {
+  const deck = [];
+  for (const suit of BJ_SUITS) for (const val of BJ_VALUES) deck.push({ suit, val });
+  return shuffle2(deck);
+}
+
+function shuffle2(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i+1)); [a[i],a[j]] = [a[j],a[i]]; }
+  return a;
+}
+
+function bjCardValue(card) {
+  if (["J","Q","K"].includes(card.val)) return 10;
+  if (card.val === "A") return 11;
+  return parseInt(card.val);
+}
+
+function bjHandValue(hand) {
+  let total = 0, aces = 0;
+  for (const c of hand) {
+    total += bjCardValue(c);
+    if (c.val === "A") aces++;
+  }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+
+function bjIsRed(suit) { return suit === "♥" || suit === "♦"; }
+
+function bjRenderCard(card, hidden = false) {
+  const div = document.createElement("div");
+  if (hidden) { div.className = "bj-card bj-card-back"; return div; }
+  div.className = "bj-card " + (bjIsRed(card.suit) ? "red" : "black");
+  div.innerHTML = `
+    <div>
+      <div class="bj-card-val">${card.val}</div>
+      <div class="bj-card-suit">${card.suit}</div>
+    </div>
+    <div class="bj-card-center">${card.suit}</div>
+    <div style="transform:rotate(180deg)">
+      <div class="bj-card-val">${card.val}</div>
+      <div class="bj-card-suit">${card.suit}</div>
+    </div>`;
+  return div;
+}
+
+function bjRenderHands(hideDealer = true) {
+  const pc = document.getElementById("bj-player-cards");
+  const dc = document.getElementById("bj-dealer-cards");
+  if (!pc || !dc) return;
+  pc.innerHTML = ""; dc.innerHTML = "";
+  bjPlayerHand.forEach(c => pc.appendChild(bjRenderCard(c)));
+  bjDealerHand.forEach((c, i) => dc.appendChild(bjRenderCard(c, hideDealer && i === 1)));
+  document.getElementById("bj-player-score").textContent = bjHandValue(bjPlayerHand);
+  document.getElementById("bj-dealer-score").textContent = hideDealer
+    ? bjCardValue(bjDealerHand[0])
+    : bjHandValue(bjDealerHand);
+}
+
+window.bjDeal = async function() {
+  if (bjPlaying) return;
+  const bet = parseBet("bj-bet"); if (!bet) return;
+  bjBet = bet;
+  userData.balance -= bet;
+  updateAllBalances();
+  bjDeck = bjCreateDeck();
+  bjPlayerHand = [bjDeck.pop(), bjDeck.pop()];
+  bjDealerHand = [bjDeck.pop(), bjDeck.pop()];
+  bjPlaying = true;
+
+  document.getElementById("bj-deal-btn").style.display = "none";
+  document.getElementById("bj-actions").style.display = "flex";
+  document.getElementById("bj-double-btn").disabled = false;
+
+  bjRenderHands(true);
+
+  const pScore = bjHandValue(bjPlayerHand);
+  const status = document.getElementById("bj-status");
+  status.className = "bj-status playing";
+
+  if (pScore === 21) {
+    status.textContent = "Blackjack ! 🎉";
+    await delay(400);
+    bjRevealAndFinish();
+    return;
+  }
+  status.textContent = "Votre tour — Tirer ou Rester ?";
+};
+
+window.bjHit = async function() {
+  if (!bjPlaying) return;
+  bjPlayerHand.push(bjDeck.pop());
+  bjRenderHands(true);
+  document.getElementById("bj-double-btn").disabled = true;
+  const score = bjHandValue(bjPlayerHand);
+  if (score > 21) {
+    document.getElementById("bj-status").textContent = "Bust ! Vous avez dépassé 21.";
+    document.getElementById("bj-status").className = "bj-status lose";
+    bjFinish("lose");
+  } else if (score === 21) {
+    await bjRevealAndFinish();
+  }
+};
+
+window.bjStand = async function() {
+  if (!bjPlaying) return;
+  await bjRevealAndFinish();
+};
+
+window.bjDouble = async function() {
+  if (!bjPlaying) return;
+  if (bjBet > userData.balance) { toast("Solde insuffisant pour doubler !", "lose"); return; }
+  userData.balance -= bjBet;
+  bjBet *= 2;
+  updateAllBalances();
+  bjPlayerHand.push(bjDeck.pop());
+  bjRenderHands(true);
+  document.getElementById("bj-double-btn").disabled = true;
+  const score = bjHandValue(bjPlayerHand);
+  if (score > 21) {
+    document.getElementById("bj-status").textContent = `Bust ! Perdu ${bjBet} VLX`;
+    document.getElementById("bj-status").className = "bj-status lose";
+    bjFinish("lose");
+  } else {
+    await bjRevealAndFinish();
+  }
+};
+
+async function bjRevealAndFinish() {
+  // Dealer joue
+  bjRenderHands(false);
+  await delay(600);
+  while (bjHandValue(bjDealerHand) < 17) {
+    bjDealerHand.push(bjDeck.pop());
+    bjRenderHands(false);
+    await delay(500);
+  }
+  const pScore = bjHandValue(bjPlayerHand);
+  const dScore = bjHandValue(bjDealerHand);
+  let outcome;
+  if (pScore > 21) outcome = "lose";
+  else if (dScore > 21) outcome = "win";
+  else if (pScore > dScore) outcome = "win";
+  else if (pScore === dScore) outcome = "push";
+  else outcome = "lose";
+  bjFinish(outcome);
+}
+
+async function bjFinish(outcome) {
+  bjPlaying = false;
+  document.getElementById("bj-actions").style.display = "none";
+  document.getElementById("bj-deal-btn").style.display = "";
+  const status = document.getElementById("bj-status");
+  bjRenderHands(false);
+
+  if (outcome === "win") {
+    const pScore = bjHandValue(bjPlayerHand);
+    const isNaturalBJ = pScore === 21 && bjPlayerHand.length === 2;
+    const mult = isNaturalBJ ? 2.5 : 2;
+    const gain = Math.round(bjBet * mult);
+    userData.balance += gain;
+    status.textContent = `Gagné ! +${gain} VLX ${isNaturalBJ ? "🃏 BLACKJACK !" : "🎉"}`;
+    status.className = "bj-status win";
+    toast(`Blackjack : +${gain} VLX 🎉`, "win");
+  } else if (outcome === "push") {
+    userData.balance += bjBet;
+    status.textContent = `Égalité — mise remboursée (${bjBet} VLX)`;
+    status.className = "bj-status push";
+    toast("Égalité — mise remboursée", "");
+  } else {
+    status.textContent = `Perdu ${bjBet} VLX — Dealer : ${bjHandValue(bjDealerHand)}`;
+    status.className = "bj-status lose";
+    toast(`Perdu ${bjBet} VLX`, "lose");
+  }
+  userData.gamesPlayed++;
+  await saveUserData();
+}
+
+// ══════════════════════════════════════════════════════════════
 //  LEADERBOARD
 // ══════════════════════════════════════════════════════════════
-let leaderboardData=[];
-function startLeaderboard(){const q=query(collection(db,"users"),orderBy("balance","desc"),limit(20));unsubLB=onSnapshot(q,snap=>{leaderboardData=snap.docs.map(d=>d.data());if(currentPage==="leaderboard")renderLeaderboard();});}
-function renderLeaderboard(){const list=document.getElementById("leaderboard-list");if(!leaderboardData.length){list.innerHTML='<div class="lb-loading">Aucun joueur encore.</div>';return;}list.innerHTML="";leaderboardData.forEach((u,i)=>{const rank=i+1;const isYou=u.uid===currentUser?.uid;const medals=["🥇","🥈","🥉"];const rankEl=rank<=3?`<div class="lb-rank gold-rank">${medals[rank-1]}</div>`:`<div class="lb-rank">#${rank}</div>`;const isOnline=u.online===true&&(Date.now()-(u.lastSeen||0))<60000;const onlineDot=`<span class="online-dot ${isOnline?'online':'offline'}"></span>`;const isFriend=(userData?.friends||[]).includes(u.uid);const addBtn=(!isYou&&!isFriend)?`<button class="btn-add-friend" onclick="sendFriendRequest('${u.uid}','${(u.name||'').replace(/'/g,"\\'")}')">+ Ami</button>`:(isFriend?`<span class="friend-tag">👥 Ami</span>`:'');const e=document.createElement("div");e.className="lb-entry"+(rank<=3?" top"+rank:"");e.innerHTML=`${rankEl}<div class="lb-avatar-wrap"><img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt="">${onlineDot}</div><span class="lb-name">${u.name||"Joueur"}${isYou?'<span class="lb-you">VOUS</span>':''}</span><span class="lb-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>${addBtn}`;list.appendChild(e);});}
+let leaderboardData = [];
+function startLeaderboard() {
+  const q = query(collection(db,"users"), orderBy("balance","desc"), limit(20));
+  unsubLB = onSnapshot(q, snap => {
+    leaderboardData = snap.docs.map(d => d.data());
+    if (currentPage === "leaderboard") renderLeaderboard();
+  });
+}
+
+function renderLeaderboard() {
+  const list = document.getElementById("leaderboard-list");
+  if (!leaderboardData.length) { list.innerHTML = '<div class="lb-loading">Aucun joueur encore.</div>'; return; }
+  list.innerHTML = "";
+  leaderboardData.forEach((u, i) => {
+    const rank = i + 1, isYou = u.uid === currentUser?.uid;
+    const medals = ["🥇","🥈","🥉"];
+    const rankEl = rank <= 3 ? `<div class="lb-rank gold-rank">${medals[rank-1]}</div>` : `<div class="lb-rank">#${rank}</div>`;
+    const isOnline = u.online === true && (Date.now() - (u.lastSeen||0)) < 60000;
+    const onlineDot = `<span class="online-dot ${isOnline?'online':'offline'}"></span>`;
+    // Bouton voir profil (pas pour soi-même)
+    const profilBtn = !isYou ? `<button class="btn-view-profil" onclick="openProfil('${u.uid}')">Profil</button>` : '';
+    const e = document.createElement("div");
+    e.className = "lb-entry" + (rank<=3?" top"+rank:"");
+    e.innerHTML = `${rankEl}<div class="lb-avatar-wrap"><img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt="">${onlineDot}</div><span class="lb-name">${u.name||"Joueur"}${isYou?'<span class="lb-you">VOUS</span>':''}</span><span class="lb-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>${profilBtn}`;
+    list.appendChild(e);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PAGE JOUEURS — RECHERCHE
+// ══════════════════════════════════════════════════════════════
+function initJoueurs() {
+  showPage("joueurs");
+  document.getElementById("player-search-input").value = "";
+  document.getElementById("players-list").innerHTML = '<div class="lb-loading">Tape un nom pour chercher un joueur.</div>';
+}
+
+window.searchPlayers = async function() {
+  const input = document.getElementById("player-search-input").value.trim().toLowerCase();
+  const list = document.getElementById("players-list");
+  if (!input || input.length < 2) {
+    list.innerHTML = '<div class="lb-loading">Tape au moins 2 caractères.</div>';
+    return;
+  }
+  list.innerHTML = '<div class="lb-loading">Recherche...</div>';
+  // Récupère tous les users et filtre côté client (Firestore ne supporte pas ILIKE)
+  try {
+    const snap = await getDocs(collection(db, "users"));
+    const results = [];
+    snap.forEach(d => {
+      const u = d.data();
+      if (u.uid === currentUser.uid) return;
+      if ((u.name || "").toLowerCase().includes(input)) results.push(u);
+    });
+    if (!results.length) { list.innerHTML = '<div class="lb-loading">Aucun joueur trouvé.</div>'; return; }
+    list.innerHTML = "";
+    results.slice(0, 20).forEach(u => {
+      const isOnline = u.online === true && (Date.now() - (u.lastSeen||0)) < 60000;
+      const e = document.createElement("div");
+      e.className = "player-entry";
+      e.innerHTML = `
+        <div class="lb-avatar-wrap" style="flex-shrink:0;width:40px;height:40px;">
+          <img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt="" style="width:40px;height:40px;">
+          <span class="online-dot ${isOnline?'online':'offline'}"></span>
+        </div>
+        <div class="player-entry-info">
+          <div class="player-entry-name">${u.name||"Joueur"}</div>
+          <div class="player-entry-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</div>
+        </div>
+        <span style="color:var(--text2);font-size:.85rem">${isOnline?"🟢 En ligne":"⚫ Hors ligne"}</span>
+      `;
+      e.onclick = () => openProfil(u.uid);
+      list.appendChild(e);
+    });
+  } catch(err) {
+    list.innerHTML = '<div class="lb-loading">Erreur de recherche.</div>';
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  PAGE PROFIL JOUEUR
+// ══════════════════════════════════════════════════════════════
+window.openProfil = async function(uid) {
+  profilTargetUid = uid;
+  showPage("profil");
+  document.getElementById("profil-name").textContent = "Chargement...";
+  document.getElementById("profil-balance").textContent = "";
+  document.getElementById("profil-status").textContent = "";
+  document.getElementById("profil-avatar").src = "";
+
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) { toast("Joueur introuvable", "lose"); goToPage("joueurs"); return; }
+  profilTargetData = snap.data();
+  const u = profilTargetData;
+  const isOnline = u.online === true && (Date.now() - (u.lastSeen||0)) < 60000;
+
+  document.getElementById("profil-avatar").src = u.avatar || "";
+  document.getElementById("profil-name").textContent = u.name || "Joueur";
+  document.getElementById("profil-balance").textContent = (u.balance||0).toLocaleString("fr-FR") + " VLX";
+  document.getElementById("profil-status").textContent = isOnline ? "🟢 En ligne" : "⚫ Hors ligne";
+  const dot = document.getElementById("profil-online-dot");
+  dot.className = "online-dot " + (isOnline ? "online" : "offline");
+  // Reset champs
+  document.getElementById("send-vlx-amount").value = 100;
+  document.getElementById("defi-bet-amount").value = 100;
+};
+
+// ── Envoyer VLX ──
+window.sendVLX = async function() {
+  if (!profilTargetUid || !profilTargetData) return;
+  const amount = parseInt(document.getElementById("send-vlx-amount").value);
+  if (!amount || amount < 1) { toast("Montant invalide", "lose"); return; }
+  if (amount > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
+  const confirmed = confirm(`Envoyer ${amount} VLX à ${profilTargetData.name} ?`);
+  if (!confirmed) return;
+  userData.balance -= amount;
+  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+  await updateDoc(doc(db, "users", profilTargetUid), { balance: increment(amount) });
+  updateAllBalances();
+  toast(`💸 ${amount} VLX envoyés à ${profilTargetData.name} !`, "win");
+};
+
+// ── Défi Morpion depuis profil ──
+window.sendDefiFromProfil = async function() {
+  if (!profilTargetUid || !profilTargetData) return;
+  const bet = parseInt(document.getElementById("defi-bet-amount").value);
+  if (!bet || bet < 10) { toast("Mise minimum 10 VLX", "lose"); return; }
+  if (bet > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
+  // Vérifier que la cible est en ligne
+  const snap = await getDoc(doc(db, "users", profilTargetUid));
+  if (!snap.exists()) { toast("Joueur introuvable", "lose"); return; }
+  const target = snap.data();
+  const isOnline = target.online === true && (Date.now() - (target.lastSeen||0)) < 60000;
+  if (!isOnline) { toast("Ce joueur est hors ligne !", "lose"); return; }
+
+  const gameId = `morpion_${currentUser.uid}_${Date.now()}`;
+  await updateDoc(doc(db, "users", profilTargetUid), {
+    pendingGameInvite: {
+      gameId, from: currentUser.uid,
+      fromName: userData.name || "Joueur",
+      manches: 3, bet, sentAt: Date.now()
+    }
+  });
+  toast(`⚔️ Défi envoyé à ${profilTargetData.name} !`, "win");
+};
 
 // ══════════════════════════════════════════════════════════════
 //  BONUS
 // ══════════════════════════════════════════════════════════════
-const BONUS_AMOUNT=50,BONUS_COOLDOWN=5*60*1000;
+const BONUS_AMOUNT=50, BONUS_COOLDOWN=5*60*1000;
 let bonusInterval=null;
 function initBonus(){clearInterval(bonusInterval);updateBonusUI();bonusInterval=setInterval(updateBonusUI,1000);}
 function timeUntilNextBonus(){return Math.max(0,(userData?.lastBonus||0)+BONUS_COOLDOWN-Date.now());}
@@ -508,56 +805,52 @@ window.buyTombolaTickets=async function(){
   if(cost>userData.balance){toast("Solde insuffisant !","lose");return;}
   userData.balance-=cost;
   await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});
-  // Chaque ticket a un id unique pour éviter la déduplication de arrayUnion
-  const newTickets=Array.from({length:qty},(_,i)=>({
-    uid:currentUser.uid,
-    name:userData.name||"Joueur",
-    _id:`${currentUser.uid}_${Date.now()}_${i}`
-  }));
-  await updateDoc(doc(db,"tombola","current"),{
-    tickets:arrayUnion(...newTickets),
-    totalPot:increment(cost)
-  });
+  const newTickets=Array.from({length:qty},(_,i)=>({uid:currentUser.uid,name:userData.name||"Joueur",_id:`${currentUser.uid}_${Date.now()}_${i}`}));
+  await updateDoc(doc(db,"tombola","current"),{tickets:arrayUnion(...newTickets),totalPot:increment(cost)});
   updateAllBalances();
   toast(`🎟️ ${qty} ticket(s) achetés pour ${cost} VLX !`,"win");
 };
 
 // ══════════════════════════════════════════════════════════════
-//  AMIS
-// ══════════════════════════════════════════════════════════════
-window.sendFriendRequest=async function(targetUid,targetName){if(!currentUser||targetUid===currentUser.uid)return;if((userData?.friends||[]).includes(targetUid)){toast("Vous êtes déjà amis !","");return;}const targetSnap=await getDoc(doc(db,"users",targetUid));if(!targetSnap.exists())return;const targetData=targetSnap.data();const alreadySent=(targetData.friendRequests||[]).some(r=>r.uid===currentUser.uid);if(alreadySent){toast("Demande déjà envoyée !","");return;}await updateDoc(doc(db,"users",targetUid),{friendRequests:arrayUnion({uid:currentUser.uid,name:userData.name||"Joueur",avatar:userData.avatar||""})});toast(`Demande envoyée à ${targetName} 👋`,"win");};
-function renderFriendRequests(){const list=document.getElementById("friend-requests-list");if(!list)return;const reqs=userData?.friendRequests||[];if(reqs.length===0){list.innerHTML='<div class="lb-loading">Aucune demande en attente.</div>';return;}list.innerHTML="";reqs.forEach(r=>{const e=document.createElement("div");e.className="friend-entry";e.innerHTML=`<div class="lb-avatar-wrap"><img class="lb-avatar" src="${r.avatar||''}" onerror="this.style.display='none'" alt=""></div><span class="lb-name">${r.name||"Joueur"}</span><div class="friend-btns"><button class="btn-accept-friend" onclick="acceptFriendRequest('${r.uid}','${(r.name||'').replace(/'/g,"\\'")}','${(r.avatar||'')}')">✅ Accepter</button><button class="btn-refuse-friend" onclick="refuseFriendRequest('${r.uid}','${(r.name||'').replace(/'/g,"\\'")}','${(r.avatar||'')}')">❌ Refuser</button></div>`;list.appendChild(e);});}
-window.acceptFriendRequest=async function(uid,name,avatar){
-  if(!currentUser||!userData)return;
-  const batch=writeBatch(db);
-  const myRef=doc(db,"users",currentUser.uid);
-  // Retirer la demande de ma liste
-  const reqToRemove=(userData.friendRequests||[]).find(r=>r.uid===uid);
-  if(reqToRemove) batch.update(myRef,{friendRequests:arrayRemove(reqToRemove)});
-  // M'ajouter comme ami de l'autre
-  batch.update(myRef,{friends:arrayUnion(uid)});
-  const theirRef=doc(db,"users",uid);
-  batch.update(theirRef,{friends:arrayUnion(currentUser.uid)});
-  await batch.commit();
-  // Mettre à jour userData local immédiatement
-  userData.friends=[...(userData.friends||[]),uid];
-  userData.friendRequests=(userData.friendRequests||[]).filter(r=>r.uid!==uid);
-  toast(`${name} est maintenant votre ami ! 🤝`,"win");
-  renderFriendRequests();
-};
-window.refuseFriendRequest=async function(uid,name,avatar){if(!currentUser||!userData)return;const reqToRemove=(userData.friendRequests||[]).find(r=>r.uid===uid);if(!reqToRemove)return;await updateDoc(doc(db,"users",currentUser.uid),{friendRequests:arrayRemove(reqToRemove)});toast("Demande refusée.","");};
-async function renderFriends(){const list=document.getElementById("friends-list");if(!list)return;const friends=userData?.friends||[];if(friends.length===0){list.innerHTML='<div class="lb-loading">Aucun ami pour l\'instant.</div>';return;}list.innerHTML='<div class="lb-loading">Chargement...</div>';const results=await Promise.all(friends.map(uid=>getDoc(doc(db,"users",uid))));list.innerHTML="";results.forEach(snap=>{if(!snap.exists())return;const u=snap.data();const isOnline=u.online===true&&(Date.now()-(u.lastSeen||0))<60000;const e=document.createElement("div");e.className="friend-entry";e.innerHTML=`<div class="lb-avatar-wrap"><img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span class="online-dot ${isOnline?'online':'offline'}"></span></div><span class="lb-name">${u.name||"Joueur"}</span><div class="friend-btns">${isOnline?`<button class="btn-defi" onclick="openGameInviteModal('${u.uid}','${(u.name||'').replace(/'/g,"\\'")}')">🎮 Défi</button>`:'<span class="friend-offline-label">Hors ligne</span>'}</div>`;list.appendChild(e);});}
-
-// ══════════════════════════════════════════════════════════════
 //  MORPION — INVITATIONS
 // ══════════════════════════════════════════════════════════════
-window.openGameInviteModal=function(uid,name){const modal=document.getElementById("game-invite-modal");document.getElementById("game-invite-target-name").textContent="Défi contre "+name;modal.setAttribute("data-target-uid",uid);modal.setAttribute("data-target-name",name);modal.style.display="flex";document.getElementById("game-invite-bet").value=100;selectManches(3);};
-window.closeGameInviteModal=function(){document.getElementById("game-invite-modal").style.display="none";};
-window.selectManches=function(n){selectedManches=n;document.getElementById("btn-3m").classList.toggle("active",n===3);document.getElementById("btn-5m").classList.toggle("active",n===5);};
-window.sendGameInvite=async function(){const modal=document.getElementById("game-invite-modal");const targetUid=modal.getAttribute("data-target-uid");const targetName=modal.getAttribute("data-target-name");const bet=parseInt(document.getElementById("game-invite-bet").value);if(!bet||bet<10){toast("Mise minimum 10 VLX","lose");return;}if(bet>userData.balance){toast("Solde insuffisant !","lose");return;}const gameId=`morpion_${currentUser.uid}_${Date.now()}`;await updateDoc(doc(db,"users",targetUid),{pendingGameInvite:{gameId,from:currentUser.uid,fromName:userData.name||"Joueur",manches:selectedManches,bet,sentAt:Date.now()}});closeGameInviteModal();toast(`Défi envoyé à ${targetName} ⚔️`,"win");};
-function showGameInviteNotif(inv){pendingGameInvite=inv;const notif=document.getElementById("game-invite-notif");document.getElementById("gin-text").textContent=`🎮 ${inv.fromName} vous défie au Morpion ! ${inv.manches} manches — ${inv.bet} VLX`;notif.style.display="block";const fill=document.getElementById("gin-timer-fill");fill.style.transition="none";fill.style.width="100%";clearTimeout(ginAutoClose);setTimeout(()=>{fill.style.transition="width 5s linear";fill.style.width="0%";},50);ginAutoClose=setTimeout(()=>{notif.style.display="none";},5000);}
-window.acceptGameInvite=async function(){if(!pendingGameInvite)return;clearTimeout(ginAutoClose);document.getElementById("game-invite-notif").style.display="none";const inv=pendingGameInvite;pendingGameInvite=null;if(inv.bet>userData.balance){toast("Pas assez de VLX pour accepter !","lose");return;}const gameRef=doc(db,"morpion",inv.gameId);await setDoc(gameRef,{players:[inv.from,currentUser.uid],names:{[inv.from]:inv.fromName,[currentUser.uid]:userData.name||"Joueur"},manches:inv.manches,bet:inv.bet,scores:{[inv.from]:0,[currentUser.uid]:0},board:Array(9).fill(""),currentTurn:inv.from,status:"playing",manche:1,lastActivity:Date.now()});await updateDoc(doc(db,"users",currentUser.uid),{pendingGameInvite:null});await updateDoc(doc(db,"users",inv.from),{pendingGameInvite:null,gameStarted:inv.gameId});startMorpion(inv.gameId,inv.from,currentUser.uid,inv.bet,inv.manches);};
-window.refuseGameInvite=async function(){clearTimeout(ginAutoClose);document.getElementById("game-invite-notif").style.display="none";if(pendingGameInvite){await updateDoc(doc(db,"users",currentUser.uid),{pendingGameInvite:null});pendingGameInvite=null;}};
+function showGameInviteNotif(inv) {
+  pendingGameInvite = inv;
+  const notif = document.getElementById("game-invite-notif");
+  document.getElementById("gin-text").textContent = `🎮 ${inv.fromName} vous défie au Morpion ! ${inv.manches} manches — ${inv.bet} VLX`;
+  notif.style.display = "block";
+  const fill = document.getElementById("gin-timer-fill");
+  fill.style.transition = "none"; fill.style.width = "100%";
+  clearTimeout(ginAutoClose);
+  setTimeout(() => { fill.style.transition = "width 5s linear"; fill.style.width = "0%"; }, 50);
+  ginAutoClose = setTimeout(() => { notif.style.display = "none"; }, 5000);
+}
+
+window.acceptGameInvite = async function() {
+  if (!pendingGameInvite) return;
+  clearTimeout(ginAutoClose);
+  document.getElementById("game-invite-notif").style.display = "none";
+  const inv = pendingGameInvite; pendingGameInvite = null;
+  if (inv.bet > userData.balance) { toast("Pas assez de VLX pour accepter !", "lose"); return; }
+  const gameRef = doc(db, "morpion", inv.gameId);
+  await setDoc(gameRef, {
+    players: [inv.from, currentUser.uid],
+    names: { [inv.from]: inv.fromName, [currentUser.uid]: userData.name || "Joueur" },
+    manches: inv.manches, bet: inv.bet,
+    scores: { [inv.from]: 0, [currentUser.uid]: 0 },
+    board: Array(9).fill(""), currentTurn: inv.from,
+    status: "playing", manche: 1, lastActivity: Date.now()
+  });
+  await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null });
+  await updateDoc(doc(db, "users", inv.from), { pendingGameInvite: null, gameStarted: inv.gameId });
+  startMorpion(inv.gameId, inv.from, currentUser.uid, inv.bet, inv.manches);
+};
+
+window.refuseGameInvite = async function() {
+  clearTimeout(ginAutoClose);
+  document.getElementById("game-invite-notif").style.display = "none";
+  if (pendingGameInvite) { await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null }); pendingGameInvite = null; }
+};
 
 // ══════════════════════════════════════════════════════════════
 //  MORPION — JEU
@@ -581,12 +874,10 @@ window.openEditName = function() {
   modal.style.display = "flex";
   setTimeout(() => input.focus(), 100);
 };
-
 window.closeEditName = function() {
   const modal = document.getElementById("edit-name-modal");
   if (modal) modal.style.display = "none";
 };
-
 window.saveEditName = async function() {
   const input = document.getElementById("edit-name-input");
   if (!input || !currentUser || !userData) return;
@@ -601,280 +892,16 @@ window.saveEditName = async function() {
 };
 
 // ══════════════════════════════════════════════════════════════
+//  INIT SLOTS au chargement de la page
+// ══════════════════════════════════════════════════════════════
+const slotsObserver = new MutationObserver(() => {
+  if (document.getElementById("page-slots")?.classList.contains("active")) initSlots();
+});
+const slotsPage = document.getElementById("page-slots");
+if (slotsPage) slotsObserver.observe(slotsPage, { attributes: true, attributeFilter: ["class"] });
+
+// ══════════════════════════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════════════════════════
 function delay(ms){return new Promise(r=>setTimeout(r,ms));}
 function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}}
-
-// ══ PLINKO ═════════════════════════════════════════════════════
-const PLINKO_ROWS = 10;
-const PLINKO_MULTIPLIERS = [10, 4, 2, 1.2, 0.5, 0.3, 0.5, 1.2, 2, 4, 10];
-const PLINKO_COLORS = ["#e74c3c","#e67e22","#f1c40f","#2ecc71","#3498db","#7f8c8d","#3498db","#2ecc71","#f1c40f","#e67e22","#e74c3c"];
-
-let plinkoBalls = [];
-let plinkoAnimating = false;
-let plinkoDropping = false;
-let plinkoRAF = null;
-let plinkoCanvas = null, plinkoCtx = null;
-let plinkoPins = [];
-let plinkoSlots = [];
-let plinkoPendingBet = 0;
-
-function initPlinko() {
-  plinkoCanvas = document.getElementById("plinko-canvas");
-  if (!plinkoCanvas) return;
-  plinkoCtx = plinkoCanvas.getContext("2d");
-
-  // Responsive canvas
-  const maxW = Math.min(420, window.innerWidth - 32);
-  plinkoCanvas.width = maxW;
-  plinkoCanvas.height = Math.round(maxW * 480 / 420);
-
-  buildPlinkoLayout();
-  renderPlinkoMultipliers();
-  drawPlinkoStatic();
-
-  if (!plinkoRAF) plinkoLoop();
-}
-
-function buildPlinkoLayout() {
-  const W = plinkoCanvas.width, H = plinkoCanvas.height;
-  const padX = W * 0.08, padTop = H * 0.06;
-  plinkoPins = [];
-  plinkoSlots = [];
-
-  for (let row = 0; row < PLINKO_ROWS; row++) {
-    const pins = row + 3;
-    const rowW = W - 2 * padX;
-    const spacing = rowW / (pins - 1);
-    const y = padTop + row * (H * 0.8 / PLINKO_ROWS);
-    const startX = padX + (row % 2 === 0 ? 0 : spacing / 2);
-    for (let col = 0; col < pins; col++) {
-      plinkoPins.push({ x: startX + col * spacing - (row % 2 === 0 ? 0 : 0), y, row, col });
-    }
-  }
-
-  // Slot positions (bottom)
-  const slotCount = PLINKO_MULTIPLIERS.length;
-  const slotW = (W - 2 * padX) / slotCount;
-  for (let i = 0; i < slotCount; i++) {
-    plinkoSlots.push({
-      x: padX + i * slotW + slotW / 2,
-      y: H * 0.92,
-      w: slotW - 4,
-      mult: PLINKO_MULTIPLIERS[i],
-      color: PLINKO_COLORS[i]
-    });
-  }
-}
-
-function renderPlinkoMultipliers() {
-  const el = document.getElementById("plinko-multipliers");
-  if (!el) return;
-  el.innerHTML = PLINKO_MULTIPLIERS.map((m, i) =>
-    `<div class="plinko-mult" style="background:${PLINKO_COLORS[i]}22;border-color:${PLINKO_COLORS[i]}88;color:${PLINKO_COLORS[i]}">×${m}</div>`
-  ).join("");
-}
-
-function drawPlinkoStatic() {
-  if (!plinkoCtx) return;
-  const W = plinkoCanvas.width, H = plinkoCanvas.height;
-  plinkoCtx.clearRect(0, 0, W, H);
-
-  // Fond
-  const bg = plinkoCtx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#0f0f1a"); bg.addColorStop(1, "#1a1a2e");
-  plinkoCtx.fillStyle = bg; plinkoCtx.fillRect(0, 0, W, H);
-
-  // Pins
-  plinkoPins.forEach(p => {
-    plinkoCtx.beginPath();
-    plinkoCtx.arc(p.x, p.y, W * 0.012, 0, Math.PI * 2);
-    const grad = plinkoCtx.createRadialGradient(p.x - 1, p.y - 1, 0, p.x, p.y, W * 0.012);
-    grad.addColorStop(0, "#d4a017");
-    grad.addColorStop(1, "#8a6000");
-    plinkoCtx.fillStyle = grad;
-    plinkoCtx.fill();
-  });
-
-  // Slots
-  plinkoSlots.forEach(s => {
-    const r = 4;
-    const x = s.x - s.w / 2, y = s.y - 18;
-    plinkoCtx.beginPath();
-    plinkoCtx.roundRect(x, y, s.w, 36, r);
-    plinkoCtx.fillStyle = s.color + "33";
-    plinkoCtx.fill();
-    plinkoCtx.strokeStyle = s.color + "99";
-    plinkoCtx.lineWidth = 1.5;
-    plinkoCtx.stroke();
-  });
-}
-
-function drawPlinkoFrame() {
-  drawPlinkoStatic();
-
-  // Billes
-  plinkoBalls.forEach(ball => {
-    if (!ball.active) return;
-    const W = plinkoCanvas.width;
-
-    plinkoCtx.save();
-    plinkoCtx.shadowColor = ball.color + "cc";
-    plinkoCtx.shadowBlur = 18;
-
-    const grad = plinkoCtx.createRadialGradient(
-      ball.x - ball.r * 0.3, ball.y - ball.r * 0.3, 1,
-      ball.x, ball.y, ball.r
-    );
-    grad.addColorStop(0, "#ffffff");
-    grad.addColorStop(0.4, "#e8e8ff");
-    grad.addColorStop(1, ball.color + "cc");
-
-    plinkoCtx.beginPath();
-    plinkoCtx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-    plinkoCtx.fillStyle = grad;
-    plinkoCtx.fill();
-    plinkoCtx.restore();
-  });
-}
-
-function plinkoLoop() {
-  plinkoRAF = requestAnimationFrame(plinkoLoop);
-  if (!plinkoCtx) return;
-
-  let anyActive = false;
-  plinkoBalls.forEach(ball => {
-    if (!ball.active) return;
-    anyActive = true;
-    updateBall(ball);
-  });
-
-  if (anyActive || plinkoBalls.length > 0) {
-    drawPlinkoFrame();
-  }
-}
-
-function updateBall(ball) {
-  const W = plinkoCanvas.width, H = plinkoCanvas.height;
-  const gravity = 0.25;
-  const friction = 0.995;
-  const pinR = W * 0.012 + ball.r;
-
-  ball.vy += gravity;
-  ball.vx *= friction;
-  ball.x += ball.vx;
-  ball.y += ball.vy;
-
-  // Collision avec les pins
-  plinkoPins.forEach(pin => {
-    const dx = ball.x - pin.x;
-    const dy = ball.y - pin.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < pinR) {
-      const angle = Math.atan2(dy, dx);
-      const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-      ball.vx = Math.cos(angle) * speed * 0.6 + (Math.random() - 0.5) * 1.5;
-      ball.vy = Math.abs(Math.sin(angle) * speed * 0.6) + 0.5;
-      ball.x = pin.x + Math.cos(angle) * (pinR + 1);
-      ball.y = pin.y + Math.sin(angle) * (pinR + 1);
-    }
-  });
-
-  // Bords
-  const padX = W * 0.07;
-  if (ball.x < padX + ball.r) { ball.x = padX + ball.r; ball.vx = Math.abs(ball.vx) * 0.7; }
-  if (ball.x > W - padX - ball.r) { ball.x = W - padX - ball.r; ball.vx = -Math.abs(ball.vx) * 0.7; }
-
-  // Arrivée dans slot
-  if (ball.y > H * 0.88 && !ball.landed) {
-    ball.landed = true;
-    ball.active = false;
-
-    // Trouver le slot le plus proche
-    let closest = plinkoSlots[0], minDist = Infinity;
-    plinkoSlots.forEach(s => {
-      const d = Math.abs(ball.x - s.x);
-      if (d < minDist) { minDist = d; closest = s; }
-    });
-
-    ball.slotColor = closest.color;
-    flashSlot(closest);
-    resolvePlinko(ball.bet, closest.mult, closest.color);
-  }
-}
-
-function flashSlot(slot) {
-  let count = 0;
-  const interval = setInterval(() => {
-    drawPlinkoFrame();
-    if (count % 2 === 0) {
-      plinkoCtx.beginPath();
-      plinkoCtx.roundRect(slot.x - slot.w / 2, slot.y - 22, slot.w, 44, 4);
-      plinkoCtx.fillStyle = slot.color + "99";
-      plinkoCtx.fill();
-      plinkoCtx.strokeStyle = slot.color;
-      plinkoCtx.lineWidth = 2;
-      plinkoCtx.stroke();
-
-      plinkoCtx.fillStyle = "#fff";
-      plinkoCtx.font = `bold ${Math.round(plinkoCanvas.width * 0.035)}px 'DM Mono', monospace`;
-      plinkoCtx.textAlign = "center";
-      plinkoCtx.textBaseline = "middle";
-      plinkoCtx.fillText("×" + slot.mult, slot.x, slot.y);
-    }
-    count++;
-    if (count >= 8) { clearInterval(interval); plinkoDropping = false; document.getElementById("plinko-drop-btn").disabled = false; }
-  }, 100);
-}
-
-async function resolvePlinko(bet, mult, color) {
-  const gain = Math.round(bet * mult);
-  userData.balance = Math.max(0, userData.balance - bet + gain);
-  userData.gamesPlayed++;
-  await saveUserData();
-
-  if (gain > bet) {
-    toast(`🔮 ×${mult} — +${gain} VLX ! 🎉`, "win");
-  } else if (gain === 0) {
-    toast(`💀 ×${mult} — Perdu ${bet} VLX`, "lose");
-  } else {
-    toast(`×${mult} — ${gain} VLX`, gain > 0 ? "" : "lose");
-  }
-}
-
-window.dropPlinko = async function() {
-  if (plinkoDropping) return;
-  const bet = parseBet("plinko-bet");
-  if (!bet) return;
-
-  plinkoDropping = true;
-  document.getElementById("plinko-drop-btn").disabled = true;
-
-  if (!plinkoCtx) initPlinko();
-
-  const W = plinkoCanvas.width;
-  const startX = W / 2 + (Math.random() - 0.5) * W * 0.08;
-
-  plinkoBalls = plinkoBalls.filter(b => b.active);
-  plinkoBalls.push({
-    x: startX,
-    y: plinkoCanvas.height * 0.03,
-    vx: (Math.random() - 0.5) * 0.8,
-    vy: 1,
-    r: W * 0.022,
-    active: true,
-    landed: false,
-    bet,
-    color: "#a855f7"
-  });
-};
-
-// Observer pour init au chargement de la page
-const plinkoObserver = new MutationObserver(() => {
-  if (document.getElementById("page-plinko")?.classList.contains("active")) {
-    setTimeout(initPlinko, 30);
-  }
-});
-const plinkoPage = document.getElementById("page-plinko");
-if (plinkoPage) plinkoObserver.observe(plinkoPage, { attributes: true, attributeFilter: ["class"] });
