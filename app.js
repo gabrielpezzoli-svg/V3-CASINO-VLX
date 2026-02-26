@@ -406,17 +406,15 @@ window.spinSlots = async function() {
   let gain = 0;
 
   if (maxCount === 3) {
-    // RTP calibré : 3 pareils prob=2.78%, ×1.6 => contrib 0.044
-    gain = Math.round(bet * 1.6);
+    gain = Math.round(bet * 3);
     msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — JACKPOT ! +${gain} VLX 🎉`;
     msgEl.className = "slots-result-msg win3";
-    toast(`JACKPOT 🎰 ! +${gain} VLX (×1.6) 🎉`, "win");
+    toast(`JACKPOT 🎰 ! +${gain} VLX (×3) 🎉`, "win");
   } else if (maxCount === 2) {
-    // 2 pareils prob=41.67%, ×1.1 => contrib 0.458 | total EV = 0.502 ≈ 51%
-    gain = Math.round(bet * 1.1);
-    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×1.1)`;
+    gain = Math.round(bet * 2);
+    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×2)`;
     msgEl.className = "slots-result-msg win2";
-    toast(`Deux pareils ! +${gain} VLX (×1.1)`, "win");
+    toast(`Deux pareils ! +${gain} VLX (×2)`, "win");
   } else {
     msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — Pas de chance...`;
     msgEl.className = "slots-result-msg lose";
@@ -560,7 +558,7 @@ async function bjFinish(outcome) {
 const PLINKO_ROWS = 12;
 // Multiplicateurs calibrés pour RTP exactement 51% (max ×5)
 // Distribution: bords rares mais payants, centre fréquent mais faible
-const PLINKO_MULTIPLIERS = [5, 3, 1.5, 1, 0.5, 0.2, 0.6, 0.2, 0.5, 1, 1.5, 3, 5];
+const PLINKO_MULTIPLIERS = [5, 3, 2, 1.5, 1, 0.5, 1, 0.5, 1, 1.5, 2, 3, 5];
 // Couleurs par valeur
 function plinkoMultColor(m) {
   if (m >= 3) return "jackpot";   // ×3, ×5
