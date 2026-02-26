@@ -13,20 +13,16 @@ let currentUser = null;
 let userData = null;
 let unsubLB = null;
 let unsubMe = null;
-let unsubMorpion = null;
+let unsubBj1v1 = null;
 let currentPage = "login";
 let pendingGameInvite = null;
 let ginAutoClose = null;
-let morpionGameId = null;
-let morpionMySymbol = "";
-let morpionOppUid = "";
-let morpionBet = 0;
-let morpionManches = 3;
+let bj1v1GameId = null;
+let bj1v1OppUid = "";
+let bj1v1Bet = 0;
 let tombolaUnsub = null;
 let tombolaTimerInterval = null;
 let tombolaData = null;
-
-// Profil cible courant (page profil joueur)
 let profilTargetUid = null;
 let profilTargetData = null;
 
@@ -58,6 +54,7 @@ window.goToGame = function(game) {
   if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
   if (game === "joueurs") initJoueurs();
+  if (game === "plinko") { showPage("plinko"); initPlinko(); return; }
   if (game === "roulette") {
     showPage("roulette");
     setTimeout(() => {
@@ -78,7 +75,7 @@ window.goToLobby = function() {
 function updateAllBalances() {
   if (!userData) return;
   const bal = (userData.balance || 0).toLocaleString("fr-FR") + " VLX";
-  ["dice", "mines", "coinflip", "tombola", "morpion", "roulette", "slots", "blackjack"].forEach(id => {
+  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","plinko"].forEach(id => {
     const el = document.getElementById(id + "-balance");
     if (el) el.textContent = bal;
   });
@@ -155,19 +152,18 @@ function listenMyDoc() {
     if (!snap.exists()) return;
     userData = snap.data();
     updateAllBalances();
-    // Détecter invite de jeu
     const inv = userData.pendingGameInvite;
     if (inv && inv.from !== currentUser.uid) {
       const age = Date.now() - inv.sentAt;
       if (age < 60000 && (!pendingGameInvite || pendingGameInvite.gameId !== inv.gameId)) showGameInviteNotif(inv);
     }
-    if (userData.gameStarted && !morpionGameId) {
+    if (userData.gameStarted && !bj1v1GameId) {
       const gid = userData.gameStarted;
       updateDoc(doc(db, "users", currentUser.uid), { gameStarted: null });
-      getDoc(doc(db, "morpion", gid)).then(gs => {
+      getDoc(doc(db, "bj1v1", gid)).then(gs => {
         if (!gs.exists()) return;
         const g = gs.data();
-        startMorpion(gid, g.players[0], g.players[1], g.bet, g.manches);
+        startBj1v1(gid, g.players[0], g.players[1], g.bet);
       });
     }
   });
@@ -329,7 +325,7 @@ window.chooseSide=function(side){if(coinFlipping)return;chosenSide=side;document
 window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;userData.balance=Math.max(0,userData.balance+(won?bet:-bet));userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
 
 // ══════════════════════════════════════════════════════════════
-//  MACHINE À SOUS (SLOTS)
+//  MACHINE À SOUS (SLOTS) — ×2 pour 2 pareils, ×3.5 pour 3
 // ══════════════════════════════════════════════════════════════
 const SLOT_SYMBOLS = ["🍒","🍋","🍊","🔔","💎","7️⃣"];
 let slotsSpinning = false;
@@ -339,14 +335,12 @@ function initSlots() {
     const strip = document.getElementById("strip-" + i);
     if (!strip) return;
     strip.innerHTML = "";
-    // Remplir chaque reel avec des symboles
     for (let j = 0; j < 20; j++) {
       const div = document.createElement("div");
       div.className = "reel-symbol";
       div.textContent = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
       strip.appendChild(div);
     }
-    // Position initiale : montrer symbol[0]
     strip.style.transform = "translateY(0px)";
   }
 }
@@ -359,31 +353,25 @@ window.spinSlots = async function() {
   btn.disabled = true;
   document.getElementById("slots-result-msg").textContent = "";
   document.getElementById("slots-result-msg").className = "slots-result-msg";
-
   userData.balance -= bet;
   updateAllBalances();
 
-  // Choisir le résultat final pour chaque reel
   const results = [
     Math.floor(Math.random() * SLOT_SYMBOLS.length),
     Math.floor(Math.random() * SLOT_SYMBOLS.length),
     Math.floor(Math.random() * SLOT_SYMBOLS.length)
   ];
 
-  // Animer chaque reel avec décalage
   const animPromises = results.map((finalIdx, reelIdx) => {
     return new Promise(resolve => {
       const strip = document.getElementById("strip-" + reelIdx);
       const symbolHeight = 90;
       const totalSymbols = 20;
-
-      // Regénérer le strip avec le résultat final à la position centrale
       strip.innerHTML = "";
       const symbols = [];
       for (let j = 0; j < totalSymbols; j++) {
         symbols.push(SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]);
       }
-      // Forcer le résultat à la position d'affichage (index 10)
       symbols[10] = SLOT_SYMBOLS[finalIdx];
       symbols.forEach(s => {
         const div = document.createElement("div");
@@ -391,14 +379,10 @@ window.spinSlots = async function() {
         div.textContent = s;
         strip.appendChild(div);
       });
-
-      // Partir de 0, animer jusqu'à la position cible
       strip.style.transition = "none";
       strip.style.transform = "translateY(0px)";
-
-      const targetY = -(10 * symbolHeight); // centrer sur index 10
-      const spinDuration = 800 + reelIdx * 400; // décalage progressif
-
+      const targetY = -(10 * symbolHeight);
+      const spinDuration = 800 + reelIdx * 400;
       setTimeout(() => {
         strip.style.transition = `transform ${spinDuration}ms cubic-bezier(.17,.67,.35,1.0)`;
         strip.style.transform = `translateY(${targetY}px)`;
@@ -409,7 +393,6 @@ window.spinSlots = async function() {
 
   await Promise.all(animPromises);
 
-  // Calculer résultat
   const finalSymbols = results.map(i => SLOT_SYMBOLS[i]);
   const counts = {};
   finalSymbols.forEach(s => { counts[s] = (counts[s] || 0) + 1; });
@@ -419,15 +402,15 @@ window.spinSlots = async function() {
   let gain = 0;
 
   if (maxCount === 3) {
-    gain = Math.round(bet * 2.5);
+    gain = Math.round(bet * 3.5);
     msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — JACKPOT ! +${gain} VLX 🎉`;
     msgEl.className = "slots-result-msg win3";
-    toast(`JACKPOT 🎰 ! +${gain} VLX (×2.5) 🎉`, "win");
+    toast(`JACKPOT 🎰 ! +${gain} VLX (×3.5) 🎉`, "win");
   } else if (maxCount === 2) {
-    gain = Math.round(bet * 1.5);
-    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×1.5)`;
+    gain = Math.round(bet * 2);
+    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×2)`;
     msgEl.className = "slots-result-msg win2";
-    toast(`Deux pareils ! +${gain} VLX (×1.5)`, "win");
+    toast(`Deux pareils ! +${gain} VLX (×2)`, "win");
   } else {
     msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — Pas de chance...`;
     msgEl.className = "slots-result-msg lose";
@@ -437,13 +420,12 @@ window.spinSlots = async function() {
   userData.balance += gain;
   userData.gamesPlayed++;
   await saveUserData();
-
   slotsSpinning = false;
   btn.disabled = false;
 };
 
 // ══════════════════════════════════════════════════════════════
-//  BLACKJACK
+//  BLACKJACK (vs Dealer)
 // ══════════════════════════════════════════════════════════════
 const BJ_SUITS = ["♠","♥","♦","♣"];
 const BJ_VALUES = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
@@ -454,48 +436,30 @@ function bjCreateDeck() {
   for (const suit of BJ_SUITS) for (const val of BJ_VALUES) deck.push({ suit, val });
   return shuffle2(deck);
 }
-
 function shuffle2(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i+1)); [a[i],a[j]] = [a[j],a[i]]; }
   return a;
 }
-
 function bjCardValue(card) {
   if (["J","Q","K"].includes(card.val)) return 10;
   if (card.val === "A") return 11;
   return parseInt(card.val);
 }
-
 function bjHandValue(hand) {
   let total = 0, aces = 0;
-  for (const c of hand) {
-    total += bjCardValue(c);
-    if (c.val === "A") aces++;
-  }
+  for (const c of hand) { total += bjCardValue(c); if (c.val === "A") aces++; }
   while (total > 21 && aces > 0) { total -= 10; aces--; }
   return total;
 }
-
 function bjIsRed(suit) { return suit === "♥" || suit === "♦"; }
-
 function bjRenderCard(card, hidden = false) {
   const div = document.createElement("div");
   if (hidden) { div.className = "bj-card bj-card-back"; return div; }
   div.className = "bj-card " + (bjIsRed(card.suit) ? "red" : "black");
-  div.innerHTML = `
-    <div>
-      <div class="bj-card-val">${card.val}</div>
-      <div class="bj-card-suit">${card.suit}</div>
-    </div>
-    <div class="bj-card-center">${card.suit}</div>
-    <div style="transform:rotate(180deg)">
-      <div class="bj-card-val">${card.val}</div>
-      <div class="bj-card-suit">${card.suit}</div>
-    </div>`;
+  div.innerHTML = `<div><div class="bj-card-val">${card.val}</div><div class="bj-card-suit">${card.suit}</div></div><div class="bj-card-center">${card.suit}</div><div style="transform:rotate(180deg)"><div class="bj-card-val">${card.val}</div><div class="bj-card-suit">${card.suit}</div></div>`;
   return div;
 }
-
 function bjRenderHands(hideDealer = true) {
   const pc = document.getElementById("bj-player-cards");
   const dc = document.getElementById("bj-dealer-cards");
@@ -504,91 +468,49 @@ function bjRenderHands(hideDealer = true) {
   bjPlayerHand.forEach(c => pc.appendChild(bjRenderCard(c)));
   bjDealerHand.forEach((c, i) => dc.appendChild(bjRenderCard(c, hideDealer && i === 1)));
   document.getElementById("bj-player-score").textContent = bjHandValue(bjPlayerHand);
-  document.getElementById("bj-dealer-score").textContent = hideDealer
-    ? bjCardValue(bjDealerHand[0])
-    : bjHandValue(bjDealerHand);
+  document.getElementById("bj-dealer-score").textContent = hideDealer ? bjCardValue(bjDealerHand[0]) : bjHandValue(bjDealerHand);
 }
-
 window.bjDeal = async function() {
   if (bjPlaying) return;
   const bet = parseBet("bj-bet"); if (!bet) return;
-  bjBet = bet;
-  userData.balance -= bet;
-  updateAllBalances();
+  bjBet = bet; userData.balance -= bet; updateAllBalances();
   bjDeck = bjCreateDeck();
   bjPlayerHand = [bjDeck.pop(), bjDeck.pop()];
   bjDealerHand = [bjDeck.pop(), bjDeck.pop()];
   bjPlaying = true;
-
   document.getElementById("bj-deal-btn").style.display = "none";
   document.getElementById("bj-actions").style.display = "flex";
   document.getElementById("bj-double-btn").disabled = false;
-
   bjRenderHands(true);
-
   const pScore = bjHandValue(bjPlayerHand);
   const status = document.getElementById("bj-status");
   status.className = "bj-status playing";
-
-  if (pScore === 21) {
-    status.textContent = "Blackjack ! 🎉";
-    await delay(400);
-    bjRevealAndFinish();
-    return;
-  }
+  if (pScore === 21) { status.textContent = "Blackjack ! 🎉"; await delay(400); bjRevealAndFinish(); return; }
   status.textContent = "Votre tour — Tirer ou Rester ?";
 };
-
 window.bjHit = async function() {
   if (!bjPlaying) return;
-  bjPlayerHand.push(bjDeck.pop());
-  bjRenderHands(true);
+  bjPlayerHand.push(bjDeck.pop()); bjRenderHands(true);
   document.getElementById("bj-double-btn").disabled = true;
   const score = bjHandValue(bjPlayerHand);
-  if (score > 21) {
-    document.getElementById("bj-status").textContent = "Bust ! Vous avez dépassé 21.";
-    document.getElementById("bj-status").className = "bj-status lose";
-    bjFinish("lose");
-  } else if (score === 21) {
-    await bjRevealAndFinish();
-  }
+  if (score > 21) { document.getElementById("bj-status").textContent = "Bust !"; document.getElementById("bj-status").className = "bj-status lose"; bjFinish("lose"); }
+  else if (score === 21) { await bjRevealAndFinish(); }
 };
-
-window.bjStand = async function() {
-  if (!bjPlaying) return;
-  await bjRevealAndFinish();
-};
-
+window.bjStand = async function() { if (!bjPlaying) return; await bjRevealAndFinish(); };
 window.bjDouble = async function() {
   if (!bjPlaying) return;
   if (bjBet > userData.balance) { toast("Solde insuffisant pour doubler !", "lose"); return; }
-  userData.balance -= bjBet;
-  bjBet *= 2;
-  updateAllBalances();
-  bjPlayerHand.push(bjDeck.pop());
-  bjRenderHands(true);
+  userData.balance -= bjBet; bjBet *= 2; updateAllBalances();
+  bjPlayerHand.push(bjDeck.pop()); bjRenderHands(true);
   document.getElementById("bj-double-btn").disabled = true;
   const score = bjHandValue(bjPlayerHand);
-  if (score > 21) {
-    document.getElementById("bj-status").textContent = `Bust ! Perdu ${bjBet} VLX`;
-    document.getElementById("bj-status").className = "bj-status lose";
-    bjFinish("lose");
-  } else {
-    await bjRevealAndFinish();
-  }
+  if (score > 21) { document.getElementById("bj-status").textContent = `Bust ! Perdu ${bjBet} VLX`; document.getElementById("bj-status").className = "bj-status lose"; bjFinish("lose"); }
+  else { await bjRevealAndFinish(); }
 };
-
 async function bjRevealAndFinish() {
-  // Dealer joue
-  bjRenderHands(false);
-  await delay(600);
-  while (bjHandValue(bjDealerHand) < 17) {
-    bjDealerHand.push(bjDeck.pop());
-    bjRenderHands(false);
-    await delay(500);
-  }
-  const pScore = bjHandValue(bjPlayerHand);
-  const dScore = bjHandValue(bjDealerHand);
+  bjRenderHands(false); await delay(600);
+  while (bjHandValue(bjDealerHand) < 17) { bjDealerHand.push(bjDeck.pop()); bjRenderHands(false); await delay(500); }
+  const pScore = bjHandValue(bjPlayerHand), dScore = bjHandValue(bjDealerHand);
   let outcome;
   if (pScore > 21) outcome = "lose";
   else if (dScore > 21) outcome = "win";
@@ -597,14 +519,12 @@ async function bjRevealAndFinish() {
   else outcome = "lose";
   bjFinish(outcome);
 }
-
 async function bjFinish(outcome) {
   bjPlaying = false;
   document.getElementById("bj-actions").style.display = "none";
   document.getElementById("bj-deal-btn").style.display = "";
   const status = document.getElementById("bj-status");
   bjRenderHands(false);
-
   if (outcome === "win") {
     const pScore = bjHandValue(bjPlayerHand);
     const isNaturalBJ = pScore === 21 && bjPlayerHand.length === 2;
@@ -629,6 +549,242 @@ async function bjFinish(outcome) {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  PLINKO
+// ══════════════════════════════════════════════════════════════
+const PLINKO_ROWS = 12;
+const PLINKO_MULTIPLIERS = [100, 20, 10, 5, 3, 1.5, 0.5, 1.5, 3, 5, 10, 20, 100];
+// Couleurs par valeur
+function plinkoMultColor(m) {
+  if (m >= 20) return "jackpot";
+  if (m >= 5) return "high";
+  if (m >= 1.5) return "mid";
+  return "low";
+}
+
+let plinkoAnimating = false;
+let plinkoCanvas, plinkoCtx;
+
+function initPlinko() {
+  plinkoCanvas = document.getElementById("plinko-canvas");
+  if (!plinkoCanvas) return;
+  plinkoCtx = plinkoCanvas.getContext("2d");
+
+  // Rendre le canvas responsive
+  const wrap = plinkoCanvas.parentElement;
+  const size = Math.min(wrap.clientWidth || 500, 500);
+  plinkoCanvas.width = size;
+  plinkoCanvas.height = Math.round(size * 0.92);
+
+  renderPlinkoMultipliers();
+  drawPlinkoBoard([]);
+}
+
+function getPlinkoLayout() {
+  const W = plinkoCanvas.width, H = plinkoCanvas.height;
+  const rows = PLINKO_ROWS;
+  const topPad = 40, bottomPad = 20;
+  const usableH = H - topPad - bottomPad;
+  const rowH = usableH / rows;
+  const pins = [];
+  for (let r = 0; r < rows; r++) {
+    const cols = r + 2;
+    const spacing = W / (cols + 1);
+    for (let c = 0; c < cols; c++) {
+      pins.push({ x: spacing * (c + 1), y: topPad + rowH * r + rowH * 0.5 });
+    }
+  }
+  return { pins, W, H, rowH, topPad };
+}
+
+function drawPlinkoBoard(balls) {
+  if (!plinkoCtx) return;
+  const { pins, W, H } = getPlinkoLayout();
+  const ctx = plinkoCtx;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = "#080c1a";
+  ctx.fillRect(0, 0, W, H);
+
+  // Pins
+  pins.forEach(p => {
+    // Glow
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 7);
+    g.addColorStop(0, "rgba(255,255,255,0.9)");
+    g.addColorStop(1, "rgba(100,180,255,0)");
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#e0eaff";
+    ctx.fill();
+  });
+
+  // Balls
+  balls.forEach(b => {
+    if (!b.active) return;
+    const bg = ctx.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, 9);
+    bg.addColorStop(0, "#ffdd60");
+    bg.addColorStop(0.6, "#e8900a");
+    bg.addColorStop(1, "#7a3a00");
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = bg;
+    ctx.shadowColor = "rgba(255,180,0,0.8)";
+    ctx.shadowBlur = 14;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+}
+
+function renderPlinkoMultipliers() {
+  const container = document.getElementById("plinko-multipliers");
+  if (!container) return;
+  container.innerHTML = "";
+  PLINKO_MULTIPLIERS.forEach((m, i) => {
+    const el = document.createElement("div");
+    el.className = `plinko-mult-cell ${plinkoMultColor(m)}`;
+    el.id = `pmult-${i}`;
+    el.textContent = m >= 1 ? `×${m}` : `×${m}`;
+    container.appendChild(el);
+  });
+}
+
+function highlightPlinkoSlot(slotIdx) {
+  document.querySelectorAll(".plinko-mult-cell").forEach(el => el.classList.remove("hit"));
+  const el = document.getElementById(`pmult-${slotIdx}`);
+  if (el) el.classList.add("hit");
+}
+
+window.dropPlinko = async function() {
+  if (plinkoAnimating) return;
+  const bet = parseBet("plinko-bet"); if (!bet) return;
+
+  plinkoAnimating = true;
+  document.getElementById("plinko-drop-btn").disabled = true;
+  userData.balance -= bet;
+  updateAllBalances();
+
+  const { pins, W, H, rowH, topPad } = getPlinkoLayout();
+  const rows = PLINKO_ROWS;
+  const slots = PLINKO_MULTIPLIERS.length; // 13 slots for 12 rows
+
+  // Simulate path
+  let slotIdx = 0;
+  for (let r = 0; r < rows; r++) {
+    // At each row, ball goes left or right
+    if (Math.random() < 0.5) slotIdx++;
+  }
+  slotIdx = Math.max(0, Math.min(PLINKO_MULTIPLIERS.length - 1, slotIdx));
+
+  // Animate ball
+  const startX = W / 2 + (Math.random() - 0.5) * 20;
+  const startY = topPad - 20;
+
+  // Build waypoints: ball visits each row's corresponding pin
+  const waypoints = [{ x: startX, y: startY }];
+  let col = 0; // column in first row (row 0 has 2 pins, spaced at W/3 and 2W/3)
+  // Reconstruct path
+  let pathCols = [0];
+  let currentSlot = 0;
+  for (let r = 0; r < rows; r++) {
+    const numCols = r + 2;
+    const spacing = W / (numCols + 1);
+    const c = pathCols[r];
+    waypoints.push({ x: spacing * (c + 1), y: topPad + rowH * r + rowH * 0.5 });
+    // Decide next column
+    let goRight = false;
+    if (r < rows - 1) {
+      // Check if this path leads to slotIdx
+      // Simple: random, but biased to reach slotIdx
+      const remaining = rows - 1 - r;
+      const neededRight = slotIdx - pathCols[r];
+      if (neededRight >= remaining) goRight = true;
+      else if (neededRight <= 0) goRight = false;
+      else goRight = Math.random() < 0.5;
+      pathCols.push(pathCols[r] + (goRight ? 1 : 0));
+    }
+  }
+
+  // Final slot position
+  const lastRow = rows - 1;
+  const lastNumCols = lastRow + 2; // = rows + 1 = 13 slots
+  const slotSpacing = W / (PLINKO_MULTIPLIERS.length + 1);
+  waypoints.push({ x: slotSpacing * (slotIdx + 1), y: H - 10 });
+
+  // Animate
+  let wpIdx = 0;
+  const ball = { x: startX, y: startY, active: true };
+  const balls = [ball];
+
+  const frameTime = 1000 / 60;
+  const stepDuration = 80; // ms per step
+  let stepStart = performance.now();
+  let lastFrame = performance.now();
+
+  await new Promise(resolve => {
+    function frame(now) {
+      const elapsed = now - stepStart;
+      const t = Math.min(elapsed / stepDuration, 1);
+      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+      if (wpIdx < waypoints.length - 1) {
+        const from = waypoints[wpIdx], to = waypoints[wpIdx + 1];
+        ball.x = from.x + (to.x - from.x) * ease;
+        ball.y = from.y + (to.y - from.y) * ease;
+      }
+
+      drawPlinkoBoard(balls);
+
+      if (t >= 1) {
+        wpIdx++;
+        stepStart = now;
+        if (wpIdx >= waypoints.length - 1) {
+          ball.x = waypoints[waypoints.length - 1].x;
+          ball.y = waypoints[waypoints.length - 1].y;
+          drawPlinkoBoard(balls);
+          ball.active = false;
+          resolve();
+          return;
+        }
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+
+  // Result
+  const mult = PLINKO_MULTIPLIERS[slotIdx];
+  const gain = Math.round(bet * mult);
+  highlightPlinkoSlot(slotIdx);
+  drawPlinkoBoard([]);
+
+  userData.balance += gain;
+  userData.gamesPlayed++;
+  await saveUserData();
+
+  if (gain > bet) {
+    toast(`⚡ ×${mult} ! +${gain} VLX 🎉`, "win");
+  } else if (gain === bet) {
+    toast(`×${mult} — Mise récupérée`, "");
+  } else {
+    toast(`×${mult} — ${gain > 0 ? '+' + gain : 'Perdu ' + bet} VLX`, gain > 0 ? "" : "lose");
+  }
+
+  // Reset after 2s
+  setTimeout(() => {
+    document.querySelectorAll(".plinko-mult-cell").forEach(el => el.classList.remove("hit"));
+    drawPlinkoBoard([]);
+  }, 2000);
+
+  plinkoAnimating = false;
+  document.getElementById("plinko-drop-btn").disabled = false;
+};
+
+// ══════════════════════════════════════════════════════════════
 //  LEADERBOARD
 // ══════════════════════════════════════════════════════════════
 let leaderboardData = [];
@@ -650,7 +806,6 @@ function renderLeaderboard() {
     const rankEl = rank <= 3 ? `<div class="lb-rank gold-rank">${medals[rank-1]}</div>` : `<div class="lb-rank">#${rank}</div>`;
     const isOnline = u.online === true && (Date.now() - (u.lastSeen||0)) < 60000;
     const onlineDot = `<span class="online-dot ${isOnline?'online':'offline'}"></span>`;
-    // Bouton voir profil (pas pour soi-même)
     const profilBtn = !isYou ? `<button class="btn-view-profil" onclick="openProfil('${u.uid}')">Profil</button>` : '';
     const e = document.createElement("div");
     e.className = "lb-entry" + (rank<=3?" top"+rank:"");
@@ -660,7 +815,7 @@ function renderLeaderboard() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  PAGE JOUEURS — RECHERCHE
+//  PAGE JOUEURS
 // ══════════════════════════════════════════════════════════════
 function initJoueurs() {
   showPage("joueurs");
@@ -671,12 +826,8 @@ function initJoueurs() {
 window.searchPlayers = async function() {
   const input = document.getElementById("player-search-input").value.trim().toLowerCase();
   const list = document.getElementById("players-list");
-  if (!input || input.length < 2) {
-    list.innerHTML = '<div class="lb-loading">Tape au moins 2 caractères.</div>';
-    return;
-  }
+  if (!input || input.length < 2) { list.innerHTML = '<div class="lb-loading">Tape au moins 2 caractères.</div>'; return; }
   list.innerHTML = '<div class="lb-loading">Recherche...</div>';
-  // Récupère tous les users et filtre côté client (Firestore ne supporte pas ILIKE)
   try {
     const snap = await getDocs(collection(db, "users"));
     const results = [];
@@ -691,23 +842,11 @@ window.searchPlayers = async function() {
       const isOnline = u.online === true && (Date.now() - (u.lastSeen||0)) < 60000;
       const e = document.createElement("div");
       e.className = "player-entry";
-      e.innerHTML = `
-        <div class="lb-avatar-wrap" style="flex-shrink:0;width:40px;height:40px;">
-          <img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt="" style="width:40px;height:40px;">
-          <span class="online-dot ${isOnline?'online':'offline'}"></span>
-        </div>
-        <div class="player-entry-info">
-          <div class="player-entry-name">${u.name||"Joueur"}</div>
-          <div class="player-entry-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</div>
-        </div>
-        <span style="color:var(--text2);font-size:.85rem">${isOnline?"🟢 En ligne":"⚫ Hors ligne"}</span>
-      `;
+      e.innerHTML = `<div class="lb-avatar-wrap" style="flex-shrink:0;width:40px;height:40px;"><img class="lb-avatar" src="${u.avatar||''}" onerror="this.style.display='none'" alt="" style="width:40px;height:40px;"><span class="online-dot ${isOnline?'online':'offline'}"></span></div><div class="player-entry-info"><div class="player-entry-name">${u.name||"Joueur"}</div><div class="player-entry-balance">${(u.balance||0).toLocaleString("fr-FR")} VLX</div></div><span style="color:var(--text2);font-size:.85rem">${isOnline?"🟢 En ligne":"⚫ Hors ligne"}</span>`;
       e.onclick = () => openProfil(u.uid);
       list.appendChild(e);
     });
-  } catch(err) {
-    list.innerHTML = '<div class="lb-loading">Erreur de recherche.</div>';
-  }
+  } catch(err) { list.innerHTML = '<div class="lb-loading">Erreur de recherche.</div>'; }
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -720,25 +859,21 @@ window.openProfil = async function(uid) {
   document.getElementById("profil-balance").textContent = "";
   document.getElementById("profil-status").textContent = "";
   document.getElementById("profil-avatar").src = "";
-
   const snap = await getDoc(doc(db, "users", uid));
   if (!snap.exists()) { toast("Joueur introuvable", "lose"); goToPage("joueurs"); return; }
   profilTargetData = snap.data();
   const u = profilTargetData;
   const isOnline = u.online === true && (Date.now() - (u.lastSeen||0)) < 60000;
-
   document.getElementById("profil-avatar").src = u.avatar || "";
   document.getElementById("profil-name").textContent = u.name || "Joueur";
   document.getElementById("profil-balance").textContent = (u.balance||0).toLocaleString("fr-FR") + " VLX";
   document.getElementById("profil-status").textContent = isOnline ? "🟢 En ligne" : "⚫ Hors ligne";
   const dot = document.getElementById("profil-online-dot");
   dot.className = "online-dot " + (isOnline ? "online" : "offline");
-  // Reset champs
   document.getElementById("send-vlx-amount").value = 100;
   document.getElementById("defi-bet-amount").value = 100;
 };
 
-// ── Envoyer VLX ──
 window.sendVLX = async function() {
   if (!profilTargetUid || !profilTargetData) return;
   const amount = parseInt(document.getElementById("send-vlx-amount").value);
@@ -753,28 +888,281 @@ window.sendVLX = async function() {
   toast(`💸 ${amount} VLX envoyés à ${profilTargetData.name} !`, "win");
 };
 
-// ── Défi Morpion depuis profil ──
+// ── Défi Blackjack 1v1 depuis profil ──
 window.sendDefiFromProfil = async function() {
   if (!profilTargetUid || !profilTargetData) return;
   const bet = parseInt(document.getElementById("defi-bet-amount").value);
   if (!bet || bet < 10) { toast("Mise minimum 10 VLX", "lose"); return; }
   if (bet > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
-  // Vérifier que la cible est en ligne
   const snap = await getDoc(doc(db, "users", profilTargetUid));
   if (!snap.exists()) { toast("Joueur introuvable", "lose"); return; }
   const target = snap.data();
   const isOnline = target.online === true && (Date.now() - (target.lastSeen||0)) < 60000;
   if (!isOnline) { toast("Ce joueur est hors ligne !", "lose"); return; }
-
-  const gameId = `morpion_${currentUser.uid}_${Date.now()}`;
+  const gameId = `bj1v1_${currentUser.uid}_${Date.now()}`;
   await updateDoc(doc(db, "users", profilTargetUid), {
     pendingGameInvite: {
       gameId, from: currentUser.uid,
       fromName: userData.name || "Joueur",
-      manches: 3, bet, sentAt: Date.now()
+      type: "bj1v1", bet, sentAt: Date.now()
     }
   });
-  toast(`⚔️ Défi envoyé à ${profilTargetData.name} !`, "win");
+  toast(`⚔️ Défi Blackjack envoyé à ${profilTargetData.name} !`, "win");
+};
+
+// ══════════════════════════════════════════════════════════════
+//  BLACKJACK 1v1
+// ══════════════════════════════════════════════════════════════
+function bj1v1CreateDeck() {
+  const deck = [];
+  for (const suit of BJ_SUITS) for (const val of BJ_VALUES) deck.push({ suit, val });
+  return shuffle2(deck);
+}
+
+function startBj1v1(gameId, p1uid, p2uid, bet) {
+  bj1v1GameId = gameId;
+  bj1v1OppUid = currentUser.uid === p1uid ? p2uid : p1uid;
+  bj1v1Bet = bet;
+  showPage("bj1v1");
+  userData.balance -= bet;
+  updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+  updateAllBalances();
+  if (unsubBj1v1) unsubBj1v1();
+  unsubBj1v1 = onSnapshot(doc(db, "bj1v1", gameId), snap => {
+    if (!snap.exists()) return;
+    const g = snap.data();
+    renderBj1v1(g);
+    if (g.status === "finished") finishBj1v1(g);
+  });
+}
+
+function bj1v1RenderCard(card, hidden = false) {
+  const div = document.createElement("div");
+  if (hidden) { div.className = "bj-card bj-card-back"; return div; }
+  div.className = "bj-card " + (bjIsRed(card.suit) ? "red" : "black");
+  div.innerHTML = `<div><div class="bj-card-val">${card.val}</div><div class="bj-card-suit">${card.suit}</div></div><div class="bj-card-center">${card.suit}</div><div style="transform:rotate(180deg)"><div class="bj-card-val">${card.val}</div><div class="bj-card-suit">${card.suit}</div></div>`;
+  return div;
+}
+
+function renderBj1v1(g) {
+  const myCards = document.getElementById("bj1v1-my-cards");
+  const oppCards = document.getElementById("bj1v1-opp-cards");
+  if (!myCards || !oppCards) return;
+  myCards.innerHTML = ""; oppCards.innerHTML = "";
+
+  const myHand = g.hands?.[currentUser.uid] || [];
+  const oppHand = g.hands?.[bj1v1OppUid] || [];
+  const gameOver = g.status === "finished";
+
+  // Afficher mes cartes
+  myHand.forEach(c => myCards.appendChild(bj1v1RenderCard(c)));
+  // Afficher cartes adversaire (cachées si pas fini)
+  oppHand.forEach((c, i) => oppCards.appendChild(bj1v1RenderCard(c, !gameOver && i === 1)));
+
+  // Scores
+  document.getElementById("bj1v1-my-score-badge").textContent = myHand.length ? bjHandValue(myHand) : "";
+  document.getElementById("bj1v1-opp-score-badge").textContent = (gameOver && oppHand.length) ? bjHandValue(oppHand) : (oppHand.length ? "?" : "");
+
+  // Noms
+  document.getElementById("bj1v1-my-name").textContent = userData?.name || "Moi";
+  document.getElementById("bj1v1-opp-name").textContent = g.names?.[bj1v1OppUid] || "Adversaire";
+  document.getElementById("bj1v1-bet-display").textContent = `${bj1v1Bet} VLX`;
+
+  // Actions
+  const myStatus = g.playerStatus?.[currentUser.uid];
+  const actions = document.getElementById("bj1v1-actions");
+  const statusEl = document.getElementById("bj1v1-status");
+
+  if (g.status === "playing" && myStatus === "playing") {
+    actions.style.display = "flex";
+    statusEl.textContent = "🃏 À votre tour — Tirer ou Rester ?";
+    statusEl.className = "bj1v1-status your-turn";
+  } else if (g.status === "playing" && myStatus === "stand") {
+    actions.style.display = "none";
+    statusEl.textContent = "⏳ En attente de l'adversaire...";
+    statusEl.className = "bj1v1-status opp-turn";
+  } else if (g.status === "playing" && myStatus === "bust") {
+    actions.style.display = "none";
+    statusEl.textContent = "💥 Bust ! En attente de l'adversaire...";
+    statusEl.className = "bj1v1-status lose";
+  } else if (g.status === "waiting") {
+    actions.style.display = "none";
+    statusEl.textContent = "⏳ En attente du démarrage...";
+    statusEl.className = "bj1v1-status";
+  }
+}
+
+async function finishBj1v1(g) {
+  if (unsubBj1v1) { unsubBj1v1(); unsubBj1v1 = null; }
+  const actions = document.getElementById("bj1v1-actions");
+  if (actions) actions.style.display = "none";
+
+  const myHand = g.hands?.[currentUser.uid] || [];
+  const oppHand = g.hands?.[bj1v1OppUid] || [];
+  const myScore = bjHandValue(myHand);
+  const oppScore = bjHandValue(oppHand);
+  const prize = bj1v1Bet * 2;
+  const statusEl = document.getElementById("bj1v1-status");
+
+  // Re-render with all cards visible
+  const myCards = document.getElementById("bj1v1-my-cards");
+  const oppCards = document.getElementById("bj1v1-opp-cards");
+  if (myCards) { myCards.innerHTML = ""; myHand.forEach(c => myCards.appendChild(bj1v1RenderCard(c))); }
+  if (oppCards) { oppCards.innerHTML = ""; oppHand.forEach(c => oppCards.appendChild(bj1v1RenderCard(c))); }
+  document.getElementById("bj1v1-my-score-badge").textContent = myScore;
+  document.getElementById("bj1v1-opp-score-badge").textContent = oppScore;
+
+  const winner = g.winner;
+  if (winner === currentUser.uid) {
+    statusEl.textContent = `🏆 Victoire ! +${prize} VLX`;
+    statusEl.className = "bj1v1-status win";
+    userData.balance += prize;
+    await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+    updateAllBalances();
+    toast(`🏆 Victoire au Blackjack 1v1 ! +${prize} VLX`, "win");
+  } else if (winner === "push") {
+    statusEl.textContent = `🤝 Égalité — mise remboursée`;
+    statusEl.className = "bj1v1-status push";
+    userData.balance += bj1v1Bet;
+    await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+    updateAllBalances();
+    toast("Égalité ! Mise remboursée.", "");
+  } else {
+    statusEl.textContent = `💀 Défaite — ${myScore} vs ${oppScore}`;
+    statusEl.className = "bj1v1-status lose";
+    toast(`Défaite au Blackjack 1v1. -${bj1v1Bet} VLX`, "lose");
+  }
+  userData.gamesPlayed++;
+  await saveUserData();
+  bj1v1GameId = null;
+  setTimeout(() => { if (currentPage === "bj1v1") goToLobby(); }, 3500);
+}
+
+window.bj1v1Hit = async function() {
+  if (!bj1v1GameId) return;
+  const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
+  if (!snap.exists()) return;
+  const g = snap.data();
+  if (g.playerStatus?.[currentUser.uid] !== "playing") return;
+
+  const hands = { ...g.hands };
+  hands[currentUser.uid] = [...(hands[currentUser.uid] || [])];
+  const deck = [...g.deck];
+  hands[currentUser.uid].push(deck.pop());
+  const myScore = bjHandValue(hands[currentUser.uid]);
+
+  const playerStatus = { ...g.playerStatus };
+  let updates = { hands, deck };
+
+  if (myScore >= 21) {
+    playerStatus[currentUser.uid] = myScore > 21 ? "bust" : "stand";
+    updates.playerStatus = playerStatus;
+    // Check if game over
+    const othersFinished = Object.values(playerStatus).every(s => s !== "playing");
+    if (othersFinished) {
+      updates = { ...updates, status: "finished", winner: determineWinner(hands, g.players) };
+    }
+  } else {
+    updates.playerStatus = playerStatus;
+  }
+  await updateDoc(doc(db, "bj1v1", bj1v1GameId), updates);
+};
+
+window.bj1v1Stand = async function() {
+  if (!bj1v1GameId) return;
+  const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
+  if (!snap.exists()) return;
+  const g = snap.data();
+  if (g.playerStatus?.[currentUser.uid] !== "playing") return;
+
+  const playerStatus = { ...g.playerStatus, [currentUser.uid]: "stand" };
+  let updates = { playerStatus };
+
+  const othersFinished = Object.entries(playerStatus).every(([uid, s]) => s !== "playing");
+  if (othersFinished) {
+    updates.status = "finished";
+    updates.winner = determineWinner(g.hands, g.players);
+  }
+  await updateDoc(doc(db, "bj1v1", bj1v1GameId), updates);
+};
+
+function determineWinner(hands, players) {
+  const scores = {};
+  players.forEach(uid => {
+    const hand = hands[uid] || [];
+    const score = bjHandValue(hand);
+    scores[uid] = score > 21 ? 0 : score;
+  });
+  const [p1, p2] = players;
+  if (scores[p1] === scores[p2]) return "push";
+  return scores[p1] > scores[p2] ? p1 : p2;
+}
+
+window.quitBj1v1 = async function() {
+  if (bj1v1GameId) {
+    const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
+    if (snap.exists() && snap.data().status === "playing") {
+      const g = snap.data();
+      await updateDoc(doc(db, "bj1v1", bj1v1GameId), {
+        status: "finished",
+        winner: bj1v1OppUid,
+        forfeit: currentUser.uid
+      });
+      toast("Vous avez abandonné. Mise perdue.", "lose");
+    }
+    if (unsubBj1v1) { unsubBj1v1(); unsubBj1v1 = null; }
+    bj1v1GameId = null;
+  }
+  goToLobby();
+};
+
+// ══════════════════════════════════════════════════════════════
+//  NOTIF INVITE DE JEU
+// ══════════════════════════════════════════════════════════════
+function showGameInviteNotif(inv) {
+  pendingGameInvite = inv;
+  const notif = document.getElementById("game-invite-notif");
+  const type = inv.type || "bj1v1";
+  document.getElementById("gin-text").textContent = `🃏 ${inv.fromName} vous défie au Blackjack 1v1 ! Mise : ${inv.bet} VLX`;
+  notif.style.display = "block";
+  const fill = document.getElementById("gin-timer-fill");
+  fill.style.transition = "none"; fill.style.width = "100%";
+  clearTimeout(ginAutoClose);
+  setTimeout(() => { fill.style.transition = "width 5s linear"; fill.style.width = "0%"; }, 50);
+  ginAutoClose = setTimeout(() => { notif.style.display = "none"; }, 5000);
+}
+
+window.acceptGameInvite = async function() {
+  if (!pendingGameInvite) return;
+  clearTimeout(ginAutoClose);
+  document.getElementById("game-invite-notif").style.display = "none";
+  const inv = pendingGameInvite; pendingGameInvite = null;
+  if (inv.bet > userData.balance) { toast("Pas assez de VLX pour accepter !", "lose"); return; }
+
+  const gameRef = doc(db, "bj1v1", inv.gameId);
+  const deck = bj1v1CreateDeck();
+  const p1hand = [deck.pop(), deck.pop()];
+  const p2hand = [deck.pop(), deck.pop()];
+  const p1 = inv.from, p2 = currentUser.uid;
+  await setDoc(gameRef, {
+    players: [p1, p2],
+    names: { [p1]: inv.fromName, [p2]: userData.name || "Joueur" },
+    bet: inv.bet,
+    deck,
+    hands: { [p1]: p1hand, [p2]: p2hand },
+    playerStatus: { [p1]: "playing", [p2]: "playing" },
+    status: "playing",
+    createdAt: Date.now()
+  });
+  await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null });
+  await updateDoc(doc(db, "users", inv.from), { pendingGameInvite: null, gameStarted: inv.gameId });
+  startBj1v1(inv.gameId, inv.from, currentUser.uid, inv.bet);
+};
+
+window.refuseGameInvite = async function() {
+  clearTimeout(ginAutoClose);
+  document.getElementById("game-invite-notif").style.display = "none";
+  if (pendingGameInvite) { await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null }); pendingGameInvite = null; }
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -798,70 +1186,7 @@ async function createNewTombola(){await setDoc(doc(db,"tombola","current"),{draw
 function startTombolaTimer(){clearInterval(tombolaTimerInterval);tombolaTimerInterval=setInterval(async()=>{if(!tombolaData)return;const remaining=tombolaData.drawAt-Date.now();const el=document.getElementById("tombola-timer");if(remaining<=0){clearInterval(tombolaTimerInterval);if(el)el.textContent="Tirage en cours...";await runTombolaDraw();}else{const h=Math.floor(remaining/3600000);const m=Math.floor((remaining%3600000)/60000);const s=Math.floor((remaining%60000)/1000);if(el)el.textContent=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;} },1000);}
 async function runTombolaDraw(){if(!tombolaData)return;const tickets=tombolaData.tickets||[];if(tickets.length===0){await setDoc(doc(db,"tombola","current"),{drawAt:Date.now()+24*60*60*1000,tickets:[],totalPot:0,createdAt:Date.now()});return;}const winner=tickets[Math.floor(Math.random()*tickets.length)];const pot=tombolaData.totalPot||0;await updateDoc(doc(db,"users",winner.uid),{balance:increment(pot)});await setDoc(doc(db,"tombola","current"),{drawAt:Date.now()+24*60*60*1000,tickets:[],totalPot:0,createdAt:Date.now()});if(winner.uid===currentUser?.uid){userData.balance+=pot;updateAllBalances();toast(`🎉 Vous avez gagné la tombola ! +${pot} VLX`,"win");}}
 function renderTombola(){if(!tombolaData)return;const pot=tombolaData.totalPot||0;const tickets=tombolaData.tickets||[];const potEl=document.getElementById("tombola-pot");if(potEl)potEl.textContent=pot.toLocaleString("fr-FR")+" VLX";const myTickets=tickets.filter(t=>t.uid===currentUser?.uid).length;const myEl=document.getElementById("tombola-my-tickets");if(myEl)myEl.innerHTML=`Vous avez <strong>${myTickets}</strong> ticket(s) — ${tickets.length} au total`;const partEl=document.getElementById("tombola-participants");if(!partEl)return;const counts={};tickets.forEach(t=>{if(!counts[t.uid])counts[t.uid]={name:t.name,count:0};counts[t.uid].count++;});const sorted=Object.entries(counts).sort((a,b)=>b[1].count-a[1].count).slice(0,10);partEl.innerHTML=sorted.length?`<div class="tombola-part-title">Participants</div>`+sorted.map(([uid,d])=>`<div class="tombola-part-row">${uid===currentUser?.uid?'<strong>Vous</strong>':d.name} <span>${d.count} ticket(s) — ${Math.round(d.count/tickets.length*100)}%</span></div>`).join(""):"";}
-window.buyTombolaTickets=async function(){
-  if(!tombolaData||!currentUser)return;
-  const qty=Math.max(1,parseInt(document.getElementById("tombola-qty").value)||1);
-  const cost=qty*TICKET_PRICE;
-  if(cost>userData.balance){toast("Solde insuffisant !","lose");return;}
-  userData.balance-=cost;
-  await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});
-  const newTickets=Array.from({length:qty},(_,i)=>({uid:currentUser.uid,name:userData.name||"Joueur",_id:`${currentUser.uid}_${Date.now()}_${i}`}));
-  await updateDoc(doc(db,"tombola","current"),{tickets:arrayUnion(...newTickets),totalPot:increment(cost)});
-  updateAllBalances();
-  toast(`🎟️ ${qty} ticket(s) achetés pour ${cost} VLX !`,"win");
-};
-
-// ══════════════════════════════════════════════════════════════
-//  MORPION — INVITATIONS
-// ══════════════════════════════════════════════════════════════
-function showGameInviteNotif(inv) {
-  pendingGameInvite = inv;
-  const notif = document.getElementById("game-invite-notif");
-  document.getElementById("gin-text").textContent = `🎮 ${inv.fromName} vous défie au Morpion ! ${inv.manches} manches — ${inv.bet} VLX`;
-  notif.style.display = "block";
-  const fill = document.getElementById("gin-timer-fill");
-  fill.style.transition = "none"; fill.style.width = "100%";
-  clearTimeout(ginAutoClose);
-  setTimeout(() => { fill.style.transition = "width 5s linear"; fill.style.width = "0%"; }, 50);
-  ginAutoClose = setTimeout(() => { notif.style.display = "none"; }, 5000);
-}
-
-window.acceptGameInvite = async function() {
-  if (!pendingGameInvite) return;
-  clearTimeout(ginAutoClose);
-  document.getElementById("game-invite-notif").style.display = "none";
-  const inv = pendingGameInvite; pendingGameInvite = null;
-  if (inv.bet > userData.balance) { toast("Pas assez de VLX pour accepter !", "lose"); return; }
-  const gameRef = doc(db, "morpion", inv.gameId);
-  await setDoc(gameRef, {
-    players: [inv.from, currentUser.uid],
-    names: { [inv.from]: inv.fromName, [currentUser.uid]: userData.name || "Joueur" },
-    manches: inv.manches, bet: inv.bet,
-    scores: { [inv.from]: 0, [currentUser.uid]: 0 },
-    board: Array(9).fill(""), currentTurn: inv.from,
-    status: "playing", manche: 1, lastActivity: Date.now()
-  });
-  await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null });
-  await updateDoc(doc(db, "users", inv.from), { pendingGameInvite: null, gameStarted: inv.gameId });
-  startMorpion(inv.gameId, inv.from, currentUser.uid, inv.bet, inv.manches);
-};
-
-window.refuseGameInvite = async function() {
-  clearTimeout(ginAutoClose);
-  document.getElementById("game-invite-notif").style.display = "none";
-  if (pendingGameInvite) { await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null }); pendingGameInvite = null; }
-};
-
-// ══════════════════════════════════════════════════════════════
-//  MORPION — JEU
-// ══════════════════════════════════════════════════════════════
-function startMorpion(gameId,p1uid,p2uid,bet,manches){morpionGameId=gameId;morpionMySymbol=currentUser.uid===p1uid?"X":"O";morpionOppUid=currentUser.uid===p1uid?p2uid:p1uid;morpionBet=bet;morpionManches=manches;showPage("morpion");document.getElementById("morpion-scores").style.display="flex";userData.balance-=bet;updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});updateAllBalances();if(unsubMorpion)unsubMorpion();unsubMorpion=onSnapshot(doc(db,"morpion",gameId),snap=>{if(!snap.exists())return;const g=snap.data();renderMorpionBoard(g);updateMorpionStatus(g);if(g.status==="finished")finishMorpion(g);else if(g.status==="manche_end"){setTimeout(async()=>{await updateDoc(doc(db,"morpion",gameId),{board:Array(9).fill(""),status:"playing",currentTurn:g.players[0]});},1800);}});}
-function renderMorpionBoard(g){const cells=document.querySelectorAll(".morpion-cell");cells.forEach((c,i)=>{c.textContent=g.board[i]||"";c.className="morpion-cell"+(g.board[i]==="X"?" x":g.board[i]==="O"?" o":"");});const me=g.scores[currentUser.uid]||0;const opp=g.scores[morpionOppUid]||0;const sMe=document.getElementById("morpion-score-me"),sOpp=document.getElementById("morpion-score-opp");if(sMe)sMe.textContent=me;if(sOpp)sOpp.textContent=opp;const info=document.getElementById("morpion-info");if(info)info.textContent=`Manche ${g.manche}/${morpionManches} — Vous: ${morpionMySymbol}`;}
-function updateMorpionStatus(g){const st=document.getElementById("morpion-status");if(!st)return;if(g.status==="playing"){if(g.currentTurn===currentUser.uid){st.textContent="🟢 À votre tour !";st.className="morpion-status your-turn";}else{st.textContent="⏳ Tour adverse...";st.className="morpion-status opp-turn";}}else if(g.status==="manche_end"){const winner=g.mancheWinner;if(winner===currentUser.uid){st.textContent="✅ Manche gagnée !";st.className="morpion-status your-turn";}else if(!winner){st.textContent="🤝 Manche nulle !";st.className="morpion-status";}else{st.textContent="❌ Manche perdue.";st.className="morpion-status opp-turn";}}}
-window.playMorpion=async function(idx){if(!morpionGameId)return;const snap=await getDoc(doc(db,"morpion",morpionGameId));if(!snap.exists())return;const g=snap.data();if(g.status!=="playing"||g.currentTurn!==currentUser.uid||g.board[idx]!=="")return;const newBoard=[...g.board];newBoard[idx]=morpionMySymbol;const winnerSymbol=checkMorpionWinner(newBoard);const isFull=newBoard.every(c=>c!=="");let updates={board:newBoard,currentTurn:morpionOppUid,lastActivity:Date.now()};if(winnerSymbol||isFull){const newScores={...g.scores};let mancheWinner=null;if(winnerSymbol){newScores[currentUser.uid]=(newScores[currentUser.uid]||0)+1;mancheWinner=currentUser.uid;}const toWin=Math.ceil(g.manches/2);const gameOver=newScores[currentUser.uid]>=toWin||newScores[morpionOppUid]>=toWin||g.manche>=g.manches;updates={...updates,scores:newScores,mancheWinner,manche:g.manche+1,status:gameOver?"finished":"manche_end"};}await updateDoc(doc(db,"morpion",morpionGameId),updates);};
-function checkMorpionWinner(board){const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];for(const[a,b,c]of lines){if(board[a]&&board[a]===board[b]&&board[a]===board[c])return board[a];}return null;}
-async function finishMorpion(g){if(unsubMorpion){unsubMorpion();unsubMorpion=null;}const myScore=g.scores[currentUser.uid]||0;const oppScore=g.scores[morpionOppUid]||0;const prize=morpionBet*2;const st=document.getElementById("morpion-status");if(myScore>oppScore){if(st){st.textContent=`🏆 Victoire ! +${prize} VLX`;st.className="morpion-status win";}userData.balance+=prize;await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});updateAllBalances();toast(`🏆 Victoire au Morpion ! +${prize} VLX`,"win");}else if(myScore===oppScore){if(st){st.textContent="🤝 Égalité — mise remboursée";st.className="morpion-status";}userData.balance+=morpionBet;await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});updateAllBalances();toast("Égalité ! Mise remboursée.","");}else{if(st){st.textContent=`💀 Défaite — perdu ${morpionBet} VLX`;st.className="morpion-status lose";}toast(`Défaite au Morpion. -${morpionBet} VLX`,"lose");}morpionGameId=null;setTimeout(()=>{if(currentPage==="morpion")goToLobby();},3000);}
-window.quitMorpion=async function(){if(morpionGameId){const snap=await getDoc(doc(db,"morpion",morpionGameId));if(snap.exists()&&snap.data().status==="playing"){await updateDoc(doc(db,"morpion",morpionGameId),{status:"finished",forfeit:currentUser.uid,scores:{...snap.data().scores,[morpionOppUid]:99}});toast("Vous avez abandonné. Mise perdue.","lose");}if(unsubMorpion){unsubMorpion();unsubMorpion=null;}morpionGameId=null;}goToLobby();};
+window.buyTombolaTickets=async function(){if(!tombolaData||!currentUser)return;const qty=Math.max(1,parseInt(document.getElementById("tombola-qty").value)||1);const cost=qty*TICKET_PRICE;if(cost>userData.balance){toast("Solde insuffisant !","lose");return;}userData.balance-=cost;await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});const newTickets=Array.from({length:qty},(_,i)=>({uid:currentUser.uid,name:userData.name||"Joueur",_id:`${currentUser.uid}_${Date.now()}_${i}`}));await updateDoc(doc(db,"tombola","current"),{tickets:arrayUnion(...newTickets),totalPot:increment(cost)});updateAllBalances();toast(`🎟️ ${qty} ticket(s) achetés pour ${cost} VLX !`,"win");};
 
 // ══════════════════════════════════════════════════════════════
 //  MODIFIER LE BLAZE
@@ -892,7 +1217,105 @@ window.saveEditName = async function() {
 };
 
 // ══════════════════════════════════════════════════════════════
-//  INIT SLOTS au chargement de la page
+//  ADMIN PANEL
+// ══════════════════════════════════════════════════════════════
+const ADMIN_CODE = "4523580303";
+let adminAuthenticated = false;
+let adminTargetUid = null;
+let adminTargetData = null;
+
+window.openAdminPanel = function() {
+  adminAuthenticated = false;
+  adminTargetUid = null;
+  adminTargetData = null;
+  const modal = document.getElementById("admin-modal");
+  if (!modal) return;
+  // Reset
+  document.getElementById("admin-auth-step").style.display = "";
+  document.getElementById("admin-panel-step").style.display = "none";
+  document.getElementById("admin-code-input").value = "";
+  document.getElementById("admin-code-error").textContent = "";
+  document.getElementById("admin-search-results").innerHTML = "";
+  document.getElementById("admin-selected-player").style.display = "none";
+  modal.style.display = "flex";
+  setTimeout(() => document.getElementById("admin-code-input").focus(), 100);
+};
+
+window.closeAdminModal = function() {
+  document.getElementById("admin-modal").style.display = "none";
+};
+
+window.checkAdminCode = function() {
+  const code = document.getElementById("admin-code-input").value.trim();
+  if (code === ADMIN_CODE) {
+    adminAuthenticated = true;
+    document.getElementById("admin-auth-step").style.display = "none";
+    document.getElementById("admin-panel-step").style.display = "flex";
+    document.getElementById("admin-search-input").value = "";
+    document.getElementById("admin-search-results").innerHTML = "";
+    document.getElementById("admin-selected-player").style.display = "none";
+    setTimeout(() => document.getElementById("admin-search-input").focus(), 100);
+  } else {
+    document.getElementById("admin-code-error").textContent = "❌ Code incorrect";
+    document.getElementById("admin-code-input").value = "";
+    setTimeout(() => { document.getElementById("admin-code-error").textContent = ""; }, 2000);
+  }
+};
+
+window.adminSearchPlayers = async function() {
+  if (!adminAuthenticated) return;
+  const input = document.getElementById("admin-search-input").value.trim().toLowerCase();
+  const resultsEl = document.getElementById("admin-search-results");
+  document.getElementById("admin-selected-player").style.display = "none";
+  adminTargetUid = null; adminTargetData = null;
+  if (!input || input.length < 2) { resultsEl.innerHTML = ""; return; }
+  resultsEl.innerHTML = "<div style='color:var(--text2);font-size:.85rem'>Recherche...</div>";
+  try {
+    const snap = await getDocs(collection(db, "users"));
+    const results = [];
+    snap.forEach(d => {
+      const u = d.data();
+      if ((u.name || "").toLowerCase().includes(input)) results.push(u);
+    });
+    resultsEl.innerHTML = "";
+    if (!results.length) { resultsEl.innerHTML = "<div style='color:var(--text2);font-size:.85rem'>Aucun joueur trouvé</div>"; return; }
+    results.slice(0, 10).forEach(u => {
+      const el = document.createElement("div");
+      el.className = "admin-player-result";
+      el.innerHTML = `<img src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span>${u.name||"Joueur"}</span><span style="font-family:var(--ff-mono);color:var(--gold2);font-size:.8rem;margin-left:auto">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>`;
+      el.onclick = () => adminSelectPlayer(u);
+      resultsEl.appendChild(el);
+    });
+  } catch(e) { resultsEl.innerHTML = "<div style='color:var(--red2);font-size:.85rem'>Erreur</div>"; }
+};
+
+function adminSelectPlayer(u) {
+  adminTargetUid = u.uid;
+  adminTargetData = u;
+  document.getElementById("admin-target-name").textContent = u.name || "Joueur";
+  document.getElementById("admin-target-balance").textContent = (u.balance||0).toLocaleString("fr-FR") + " VLX";
+  document.getElementById("admin-selected-player").style.display = "";
+  document.getElementById("admin-give-amount").value = 1000;
+  document.getElementById("admin-search-results").innerHTML = "";
+  document.getElementById("admin-search-input").value = u.name || "";
+}
+
+window.adminGiveVLX = async function() {
+  if (!adminAuthenticated || !adminTargetUid) return;
+  const amount = parseInt(document.getElementById("admin-give-amount").value);
+  if (!amount || amount < 1) { toast("Montant invalide", "lose"); return; }
+  try {
+    await updateDoc(doc(db, "users", adminTargetUid), { balance: increment(amount) });
+    toast(`✅ ${amount} VLX donnés à ${adminTargetData?.name || adminTargetUid} !`, "win");
+    // Refresh balance display
+    const newBal = (adminTargetData?.balance || 0) + amount;
+    document.getElementById("admin-target-balance").textContent = newBal.toLocaleString("fr-FR") + " VLX";
+    if (adminTargetData) adminTargetData.balance = newBal;
+  } catch(e) { toast("Erreur lors du don", "lose"); }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  INIT SLOTS au chargement
 // ══════════════════════════════════════════════════════════════
 const slotsObserver = new MutationObserver(() => {
   if (document.getElementById("page-slots")?.classList.contains("active")) initSlots();
