@@ -257,7 +257,7 @@ async function endSpinRoulette(result,resultColor,bet){
 // ══════════════════════════════════════════════════════════════
 let diceTarget=50, diceDirection="under", diceRolling=false;
 function diceWinChance(){return diceDirection==="under"?(diceTarget-1)/100:(100-diceTarget)/100;}
-function diceMultiplier(){const c=diceWinChance();return c<=0?0:Math.round((0.51/c)*100)/100;}
+function diceMultiplier(){const c=diceWinChance();return c<=0?0:Math.round((0.98/c)*100)/100;}
 function updateDiceUI(){
   document.getElementById("dice-target-display").textContent=diceTarget;
   document.getElementById("dice-mult-display").textContent="×"+diceMultiplier().toFixed(2);
@@ -312,12 +312,12 @@ window.flipCoin=async function(){
   const coin=document.getElementById("coin");coin.className="coin flip-"+result;
   await delay(1400);
   const won=result===chosenSide;
-  const gain=won?Math.round(bet*1.9):-bet;
+  const gain=won?bet:-bet;
   userData.balance=Math.max(0,userData.balance+gain);userData.gamesPlayed++;await saveUserData();
   document.getElementById("coinflip-result").innerHTML=won
-    ?`<span style="color:var(--green2)">Gagné ! +${Math.round(bet*1.9)} VLX 🎉</span>`
+    ?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`
     :`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
-  toast(won?`Correct ! +${Math.round(bet*1.9)} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");
+  toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");
   await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;
   document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");
   document.getElementById("coinflip-btn").disabled=true;
