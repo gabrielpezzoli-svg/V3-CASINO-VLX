@@ -275,7 +275,8 @@ async function endSpinRoulette(result,resultColor,bet){
 // ══════════════════════════════════════════════════════════════
 let diceTarget=50, diceDirection="under", diceRolling=false;
 function diceWinChance(){return diceDirection==="under"?(diceTarget-1)/100:(100-diceTarget)/100;}
-function diceMultiplier(){const c=diceWinChance();return c<=0?0:Math.round((0.98/c)*100)/100;}
+// Multiplicateur calibré pour RTP 51% : 0.51 / prob_de_gagner
+function diceMultiplier(){const c=diceWinChance();return c<=0?0:Math.round((0.51/c)*100)/100;}
 function updateDiceUI(){
   document.getElementById("dice-target-display").textContent=diceTarget;
   document.getElementById("dice-mult-display").textContent="×"+diceMultiplier().toFixed(2);
@@ -322,7 +323,10 @@ function resetMinesButtons(){document.getElementById("mines-start-btn").disabled
 // ══════════════════════════════════════════════════════════════
 let chosenSide=null, coinFlipping=false;
 window.chooseSide=function(side){if(coinFlipping)return;chosenSide=side;document.getElementById("choose-blue").classList.toggle("selected",side==="blue");document.getElementById("choose-red").classList.toggle("selected",side==="red");document.getElementById("coinflip-btn").disabled=false;};
-window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;userData.balance=Math.max(0,userData.balance+(won?bet:-bet));userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
+window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;
+  // ×1.9 sur win => RTP 95% (house edge 5%)
+  const gain = won ? Math.round(bet * 1.9) : -bet;
+  userData.balance=Math.max(0,userData.balance+gain);userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${Math.round(bet*1.9)} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${Math.round(bet*1.9)} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
 
 // ══════════════════════════════════════════════════════════════
 //  MACHINE À SOUS (SLOTS) — ×2 pour 2 pareils, ×3.5 pour 3
@@ -402,15 +406,17 @@ window.spinSlots = async function() {
   let gain = 0;
 
   if (maxCount === 3) {
-    gain = Math.round(bet * 3.5);
+    // RTP calibré : 3 pareils prob=2.78%, ×1.6 => contrib 0.044
+    gain = Math.round(bet * 1.6);
     msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — JACKPOT ! +${gain} VLX 🎉`;
     msgEl.className = "slots-result-msg win3";
-    toast(`JACKPOT 🎰 ! +${gain} VLX (×3.5) 🎉`, "win");
+    toast(`JACKPOT 🎰 ! +${gain} VLX (×1.6) 🎉`, "win");
   } else if (maxCount === 2) {
-    gain = Math.round(bet * 2);
-    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×2)`;
+    // 2 pareils prob=41.67%, ×1.1 => contrib 0.458 | total EV = 0.502 ≈ 51%
+    gain = Math.round(bet * 1.1);
+    msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — +${gain} VLX (×1.1)`;
     msgEl.className = "slots-result-msg win2";
-    toast(`Deux pareils ! +${gain} VLX (×2)`, "win");
+    toast(`Deux pareils ! +${gain} VLX (×1.1)`, "win");
   } else {
     msgEl.textContent = `${finalSymbols[0]} ${finalSymbols[1]} ${finalSymbols[2]} — Pas de chance...`;
     msgEl.className = "slots-result-msg lose";
@@ -552,13 +558,15 @@ async function bjFinish(outcome) {
 //  PLINKO
 // ══════════════════════════════════════════════════════════════
 const PLINKO_ROWS = 12;
-const PLINKO_MULTIPLIERS = [100, 20, 10, 5, 3, 1.5, 0.5, 1.5, 3, 5, 10, 20, 100];
+// Multiplicateurs calibrés pour RTP exactement 51% (max ×5)
+// Distribution: bords rares mais payants, centre fréquent mais faible
+const PLINKO_MULTIPLIERS = [5, 3, 1.5, 1, 0.5, 0.2, 0.6, 0.2, 0.5, 1, 1.5, 3, 5];
 // Couleurs par valeur
 function plinkoMultColor(m) {
-  if (m >= 20) return "jackpot";
-  if (m >= 5) return "high";
-  if (m >= 1.5) return "mid";
-  return "low";
+  if (m >= 3) return "jackpot";   // ×3, ×5
+  if (m >= 1) return "high";      // ×1, ×1.5
+  if (m >= 0.5) return "mid";     // ×0.5, ×0.6
+  return "low";                   // ×0.2
 }
 
 let plinkoAnimating = false;
