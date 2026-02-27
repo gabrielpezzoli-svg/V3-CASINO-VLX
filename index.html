@@ -92,12 +92,6 @@
         <div class="gc-desc">Contre le dealer · 21 sans dépasser</div>
         <div class="gc-play">JOUER →</div>
       </div>
-      <div class="game-card" onclick="goToGame('plinko')">
-        <div class="gc-icon">⚡</div>
-        <div class="gc-name">Plinko</div>
-        <div class="gc-desc">Lâche la bille · Multiplicateurs jusqu'à ×100</div>
-        <div class="gc-play">JOUER →</div>
-      </div>
       <div class="game-card leaderboard-card" onclick="goToGame('leaderboard')">
         <div class="gc-icon">🏆</div>
         <div class="gc-name">Classement</div>
@@ -354,33 +348,6 @@
         </div>
       </div>
       <button id="bj-deal-btn" class="btn-play" onclick="bjDeal()">🃏 DISTRIBUER</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE PLINKO -->
-<div id="page-plinko" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">⚡ Plinko</div>
-    <div id="plinko-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content plinko-content">
-    <div class="plinko-arena">
-      <canvas id="plinko-canvas" width="500" height="460"></canvas>
-    </div>
-    <div class="plinko-multipliers" id="plinko-multipliers"></div>
-    <div class="bet-panel">
-      <label class="bet-label">Mise (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="plinko-bet" class="bet-input" value="100" min="10"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('plinko-bet',0.5)">½</button>
-          <button onclick="quickBet('plinko-bet',2)">×2</button>
-          <button onclick="setMax('plinko-bet')">MAX</button>
-        </div>
-      </div>
-      <button id="plinko-drop-btn" class="btn-play" onclick="dropPlinko()">⚡ LÂCHER LA BILLE</button>
     </div>
   </div>
 </div>
