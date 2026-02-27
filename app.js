@@ -322,9 +322,7 @@ function resetMinesButtons(){document.getElementById("mines-start-btn").disabled
 // ══════════════════════════════════════════════════════════════
 let chosenSide=null, coinFlipping=false;
 window.chooseSide=function(side){if(coinFlipping)return;chosenSide=side;document.getElementById("choose-blue").classList.toggle("selected",side==="blue");document.getElementById("choose-red").classList.toggle("selected",side==="red");document.getElementById("coinflip-btn").disabled=false;};
-window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;
-  const gain = won ? bet : -bet;
-  userData.balance=Math.max(0,userData.balance+gain);userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
+window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;userData.balance=Math.max(0,userData.balance+(won?bet:-bet));userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
 
 // ══════════════════════════════════════════════════════════════
 //  MACHINE À SOUS (SLOTS) — ×2 pour 2 pareils, ×3.5 pour 3
@@ -554,15 +552,13 @@ async function bjFinish(outcome) {
 //  PLINKO
 // ══════════════════════════════════════════════════════════════
 const PLINKO_ROWS = 12;
-// Multiplicateurs calibrés pour RTP exactement 51% (max ×5)
-// Distribution: bords rares mais payants, centre fréquent mais faible
-const PLINKO_MULTIPLIERS = [5, 3, 2, 1.5, 1, 0.5, 1, 0.5, 1, 1.5, 2, 3, 5];
+const PLINKO_MULTIPLIERS = [100, 20, 10, 5, 3, 1.5, 0.5, 1.5, 3, 5, 10, 20, 100];
 // Couleurs par valeur
 function plinkoMultColor(m) {
-  if (m >= 3) return "jackpot";   // ×3, ×5
-  if (m >= 1) return "high";      // ×1, ×1.5
-  if (m >= 0.5) return "mid";     // ×0.5, ×0.6
-  return "low";                   // ×0.2
+  if (m >= 20) return "jackpot";
+  if (m >= 5) return "high";
+  if (m >= 1.5) return "mid";
+  return "low";
 }
 
 let plinkoAnimating = false;
@@ -1316,21 +1312,6 @@ window.adminGiveVLX = async function() {
     document.getElementById("admin-target-balance").textContent = newBal.toLocaleString("fr-FR") + " VLX";
     if (adminTargetData) adminTargetData.balance = newBal;
   } catch(e) { toast("Erreur lors du don", "lose"); }
-};
-
-window.adminRemoveVLX = async function() {
-  if (!adminAuthenticated || !adminTargetUid) return;
-  const amount = parseInt(document.getElementById("admin-give-amount").value);
-  if (!amount || amount < 1) { toast("Montant invalide", "lose"); return; }
-  const currentBal = adminTargetData?.balance || 0;
-  const finalBal = Math.max(0, currentBal - amount);
-  try {
-    await updateDoc(doc(db, "users", adminTargetUid), { balance: finalBal });
-    const delta = finalBal - currentBal;
-    document.getElementById("admin-target-balance").textContent = finalBal.toLocaleString("fr-FR") + " VLX";
-    if (adminTargetData) adminTargetData.balance = finalBal;
-    toast(`🗑️ ${amount} VLX retirés à ${adminTargetData?.name || adminTargetUid}`, "lose");
-  } catch(e) { toast("Erreur lors du retrait", "lose"); }
 };
 
 // ══════════════════════════════════════════════════════════════
