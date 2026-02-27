@@ -95,7 +95,7 @@
       <div class="game-card" onclick="goToGame('plinko')">
         <div class="gc-icon">⚡</div>
         <div class="gc-name">Plinko</div>
-        <div class="gc-desc">Lâche la bille · Max ×5 · Multiplicateurs visibles</div>
+        <div class="gc-desc">Lâche la bille · Multiplicateurs jusqu'à ×100</div>
         <div class="gc-play">JOUER →</div>
       </div>
       <div class="game-card leaderboard-card" onclick="goToGame('leaderboard')">
@@ -300,8 +300,8 @@
       <div id="slots-result-msg" class="slots-result-msg"></div>
     </div>
     <div class="slots-paytable">
-      <div class="slots-pay-row"><span>3 symboles identiques</span><span class="slots-pay-mult">×3</span></div>
       <div class="slots-pay-row"><span>2 symboles identiques</span><span class="slots-pay-mult">×2</span></div>
+      <div class="slots-pay-row"><span>3 symboles identiques</span><span class="slots-pay-mult">×3.5</span></div>
       <div class="slots-pay-row"><span>Aucun résultat</span><span class="slots-pay-mult">Perdu</span></div>
     </div>
     <div class="bet-panel">
@@ -560,7 +560,7 @@
     </div>
 
     <!-- Étape 2 : panel -->
-    <div id="admin-panel-step" style="display:none;flex-direction:column;gap:.8rem">
+    <div id="admin-panel-step" style="display:none;display:flex;flex-direction:column;gap:.8rem">
       <div style="color:var(--green2);font-size:.85rem">✅ Accès accordé</div>
 
       <label class="bet-label">Rechercher un joueur</label>
@@ -577,10 +577,7 @@
           <input type="number" id="admin-give-amount" class="bet-input" value="1000" min="1"/>
         </div>
         <div class="admin-modal-btns">
-          <div style="display:flex;gap:.6rem;margin-bottom:.4rem">
-          <button class="btn-admin-add" style="flex:1" onclick="adminGiveVLX()">💰 DONNER</button>
-          <button class="btn-admin-remove" style="flex:1" onclick="adminRemoveVLX()">🗑️ RETIRER</button>
-        </div>
+          <button class="btn-admin-add" onclick="adminGiveVLX()">💰 DONNER LES VLX</button>
           <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
         </div>
       </div>
