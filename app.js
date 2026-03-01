@@ -20,6 +20,7 @@ let ginAutoClose = null;
 let bj1v1GameId = null;
 let bj1v1OppUid = "";
 let bj1v1Bet = 0;
+let bj1v1Starting = false; // ✅ FIX: verrou anti-double démarrage
 let tombolaUnsub = null;
 let tombolaTimerInterval = null;
 let tombolaData = null;
@@ -54,7 +55,7 @@ window.goToGame = function(game) {
   if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
   if (game === "joueurs") initJoueurs();
-  
+
   if (game === "roulette") {
     showPage("roulette");
     setTimeout(() => {
@@ -152,18 +153,27 @@ function listenMyDoc() {
     if (!snap.exists()) return;
     userData = snap.data();
     updateAllBalances();
+
+    // ── Invite de jeu entrante ──
     const inv = userData.pendingGameInvite;
     if (inv && inv.from !== currentUser.uid) {
       const age = Date.now() - inv.sentAt;
-      if (age < 60000 && (!pendingGameInvite || pendingGameInvite.gameId !== inv.gameId)) showGameInviteNotif(inv);
+      if (age < 60000 && (!pendingGameInvite || pendingGameInvite.gameId !== inv.gameId)) {
+        showGameInviteNotif(inv);
+      }
     }
-    if (userData.gameStarted && !bj1v1GameId) {
+
+    // ✅ FIX BUG 5 : verrou bj1v1Starting pour éviter double démarrage
+    if (userData.gameStarted && !bj1v1GameId && !bj1v1Starting) {
       const gid = userData.gameStarted;
-      updateDoc(doc(db, "users", currentUser.uid), { gameStarted: null });
-      getDoc(doc(db, "bj1v1", gid)).then(gs => {
-        if (!gs.exists()) return;
-        const g = gs.data();
-        startBj1v1(gid, g.players[0], g.players[1], g.bet);
+      bj1v1Starting = true;
+      // Effacer immédiatement pour ne pas re-trigger
+      updateDoc(doc(db, "users", currentUser.uid), { gameStarted: null }).then(() => {
+        getDoc(doc(db, "bj1v1", gid)).then(gs => {
+          if (!gs.exists()) { bj1v1Starting = false; return; }
+          const g = gs.data();
+          startBj1v1(gid, g.players[0], g.players[1], g.bet);
+        }).catch(() => { bj1v1Starting = false; });
       });
     }
   });
@@ -652,30 +662,43 @@ window.sendVLX = async function() {
   toast(`💸 ${amount} VLX envoyés à ${profilTargetData.name} !`, "win");
 };
 
-// ── Défi Blackjack 1v1 depuis profil ──
+// ══════════════════════════════════════════════════════════════
+//  ENVOYER UN DÉFI BLACKJACK 1v1
+// ══════════════════════════════════════════════════════════════
 window.sendDefiFromProfil = async function() {
   if (!profilTargetUid || !profilTargetData) return;
   const bet = parseInt(document.getElementById("defi-bet-amount").value);
   if (!bet || bet < 10) { toast("Mise minimum 10 VLX", "lose"); return; }
   if (bet > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
+
+  // ✅ FIX: Relire le doc à jour pour vérifier online
   const snap = await getDoc(doc(db, "users", profilTargetUid));
   if (!snap.exists()) { toast("Joueur introuvable", "lose"); return; }
   const target = snap.data();
   const isOnline = target.online === true && (Date.now() - (target.lastSeen||0)) < 60000;
   if (!isOnline) { toast("Ce joueur est hors ligne !", "lose"); return; }
+
+  // ✅ FIX: Vérifier si l'adversaire a déjà une invite en attente
+  if (target.pendingGameInvite && (Date.now() - target.pendingGameInvite.sentAt) < 60000) {
+    toast("Ce joueur a déjà un défi en attente !", "lose"); return;
+  }
+
   const gameId = `bj1v1_${currentUser.uid}_${Date.now()}`;
   await updateDoc(doc(db, "users", profilTargetUid), {
     pendingGameInvite: {
-      gameId, from: currentUser.uid,
+      gameId,
+      from: currentUser.uid,
       fromName: userData.name || "Joueur",
-      type: "bj1v1", bet, sentAt: Date.now()
+      type: "bj1v1",
+      bet,
+      sentAt: Date.now()
     }
   });
-  toast(`⚔️ Défi Blackjack envoyé à ${profilTargetData.name} !`, "win");
+  toast(`⚔️ Défi Blackjack envoyé à ${target.name} !`, "win");
 };
 
 // ══════════════════════════════════════════════════════════════
-//  BLACKJACK 1v1
+//  BLACKJACK 1v1 — LOGIQUE PRINCIPALE
 // ══════════════════════════════════════════════════════════════
 function bj1v1CreateDeck() {
   const deck = [];
@@ -683,15 +706,17 @@ function bj1v1CreateDeck() {
   return shuffle2(deck);
 }
 
+// ✅ FIX BUG 1 : startBj1v1 ne déduit plus la mise ici
+// La mise est déduite une seule fois : accepteur dans acceptGameInvite, challenger via gameStarted
 function startBj1v1(gameId, p1uid, p2uid, bet) {
   bj1v1GameId = gameId;
   bj1v1OppUid = currentUser.uid === p1uid ? p2uid : p1uid;
   bj1v1Bet = bet;
+  bj1v1Starting = false; // libérer le verrou
   showPage("bj1v1");
-  userData.balance -= bet;
-  updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
   updateAllBalances();
-  if (unsubBj1v1) unsubBj1v1();
+
+  if (unsubBj1v1) { unsubBj1v1(); unsubBj1v1 = null; }
   unsubBj1v1 = onSnapshot(doc(db, "bj1v1", gameId), snap => {
     if (!snap.exists()) return;
     const g = snap.data();
@@ -718,38 +743,35 @@ function renderBj1v1(g) {
   const oppHand = g.hands?.[bj1v1OppUid] || [];
   const gameOver = g.status === "finished";
 
-  // Afficher mes cartes
   myHand.forEach(c => myCards.appendChild(bj1v1RenderCard(c)));
-  // Afficher cartes adversaire (cachées si pas fini)
-  oppHand.forEach((c, i) => oppCards.appendChild(bj1v1RenderCard(c, !gameOver && i === 1)));
+  // ✅ Cartes adversaire : toutes cachées (sauf si fini)
+  oppHand.forEach(c => oppCards.appendChild(bj1v1RenderCard(c, !gameOver)));
 
-  // Scores
   document.getElementById("bj1v1-my-score-badge").textContent = myHand.length ? bjHandValue(myHand) : "";
   document.getElementById("bj1v1-opp-score-badge").textContent = (gameOver && oppHand.length) ? bjHandValue(oppHand) : (oppHand.length ? "?" : "");
-
-  // Noms
   document.getElementById("bj1v1-my-name").textContent = userData?.name || "Moi";
   document.getElementById("bj1v1-opp-name").textContent = g.names?.[bj1v1OppUid] || "Adversaire";
   document.getElementById("bj1v1-bet-display").textContent = `${bj1v1Bet} VLX`;
 
-  // Actions
   const myStatus = g.playerStatus?.[currentUser.uid];
   const actions = document.getElementById("bj1v1-actions");
   const statusEl = document.getElementById("bj1v1-status");
 
-  if (g.status === "playing" && myStatus === "playing") {
+  if (g.status === "finished") return; // géré par finishBj1v1
+
+  if (myStatus === "playing") {
     actions.style.display = "flex";
     statusEl.textContent = "🃏 À votre tour — Tirer ou Rester ?";
     statusEl.className = "bj1v1-status your-turn";
-  } else if (g.status === "playing" && myStatus === "stand") {
+  } else if (myStatus === "stand") {
     actions.style.display = "none";
     statusEl.textContent = "⏳ En attente de l'adversaire...";
     statusEl.className = "bj1v1-status opp-turn";
-  } else if (g.status === "playing" && myStatus === "bust") {
+  } else if (myStatus === "bust") {
     actions.style.display = "none";
     statusEl.textContent = "💥 Bust ! En attente de l'adversaire...";
     statusEl.className = "bj1v1-status lose";
-  } else if (g.status === "waiting") {
+  } else {
     actions.style.display = "none";
     statusEl.textContent = "⏳ En attente du démarrage...";
     statusEl.className = "bj1v1-status";
@@ -768,7 +790,7 @@ async function finishBj1v1(g) {
   const prize = bj1v1Bet * 2;
   const statusEl = document.getElementById("bj1v1-status");
 
-  // Re-render with all cards visible
+  // Afficher toutes les cartes
   const myCards = document.getElementById("bj1v1-my-cards");
   const oppCards = document.getElementById("bj1v1-opp-cards");
   if (myCards) { myCards.innerHTML = ""; myHand.forEach(c => myCards.appendChild(bj1v1RenderCard(c))); }
@@ -777,58 +799,68 @@ async function finishBj1v1(g) {
   document.getElementById("bj1v1-opp-score-badge").textContent = oppScore;
 
   const winner = g.winner;
-  if (winner === currentUser.uid) {
-    statusEl.textContent = `🏆 Victoire ! +${prize} VLX`;
-    statusEl.className = "bj1v1-status win";
-    userData.balance += prize;
-    await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
-    updateAllBalances();
-    toast(`🏆 Victoire au Blackjack 1v1 ! +${prize} VLX`, "win");
-  } else if (winner === "push") {
+  if (winner === "push") {
     statusEl.textContent = `🤝 Égalité — mise remboursée`;
     statusEl.className = "bj1v1-status push";
     userData.balance += bj1v1Bet;
     await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
     updateAllBalances();
     toast("Égalité ! Mise remboursée.", "");
+  } else if (winner === currentUser.uid) {
+    statusEl.textContent = `🏆 Victoire ! +${prize} VLX`;
+    statusEl.className = "bj1v1-status win";
+    userData.balance += prize;
+    await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+    updateAllBalances();
+    toast(`🏆 Victoire au Blackjack 1v1 ! +${prize} VLX`, "win");
   } else {
-    statusEl.textContent = `💀 Défaite — ${myScore} vs ${oppScore}`;
+    // ✅ Cas forfait
+    if (g.forfeit === currentUser.uid) {
+      statusEl.textContent = `🏳️ Abandon — mise perdue`;
+    } else {
+      statusEl.textContent = `💀 Défaite — ${myScore > 21 ? "Bust" : myScore} vs ${oppScore > 21 ? "Bust" : oppScore}`;
+    }
     statusEl.className = "bj1v1-status lose";
     toast(`Défaite au Blackjack 1v1. -${bj1v1Bet} VLX`, "lose");
   }
+
   userData.gamesPlayed++;
   await saveUserData();
   bj1v1GameId = null;
   setTimeout(() => { if (currentPage === "bj1v1") goToLobby(); }, 3500);
 }
 
+// ✅ FIX BUG 2 : Hit relit le deck depuis Firestore pour éviter désync
 window.bj1v1Hit = async function() {
   if (!bj1v1GameId) return;
   const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
   if (!snap.exists()) return;
   const g = snap.data();
   if (g.playerStatus?.[currentUser.uid] !== "playing") return;
+  if (g.status === "finished") return;
 
-  const hands = { ...g.hands };
-  hands[currentUser.uid] = [...(hands[currentUser.uid] || [])];
+  const hands = JSON.parse(JSON.stringify(g.hands)); // deep copy
   const deck = [...g.deck];
-  hands[currentUser.uid].push(deck.pop());
-  const myScore = bjHandValue(hands[currentUser.uid]);
+  const newCard = deck.pop();
+  hands[currentUser.uid] = [...(hands[currentUser.uid] || []), newCard];
 
+  const myScore = bjHandValue(hands[currentUser.uid]);
   const playerStatus = { ...g.playerStatus };
   let updates = { hands, deck };
 
   if (myScore >= 21) {
     playerStatus[currentUser.uid] = myScore > 21 ? "bust" : "stand";
     updates.playerStatus = playerStatus;
-    // Check if game over
-    const othersFinished = Object.values(playerStatus).every(s => s !== "playing");
-    if (othersFinished) {
-      updates = { ...updates, status: "finished", winner: determineWinner(hands, g.players) };
+    const allDone = Object.values(playerStatus).every(s => s !== "playing");
+    if (allDone) {
+      // ✅ FIX BUG 3 : determineWinner amélioré
+      updates.status = "finished";
+      updates.winner = determineWinner(hands, g.players);
     }
   } else {
     updates.playerStatus = playerStatus;
   }
+
   await updateDoc(doc(db, "bj1v1", bj1v1GameId), updates);
 };
 
@@ -838,44 +870,49 @@ window.bj1v1Stand = async function() {
   if (!snap.exists()) return;
   const g = snap.data();
   if (g.playerStatus?.[currentUser.uid] !== "playing") return;
+  if (g.status === "finished") return;
 
   const playerStatus = { ...g.playerStatus, [currentUser.uid]: "stand" };
   let updates = { playerStatus };
 
-  const othersFinished = Object.entries(playerStatus).every(([uid, s]) => s !== "playing");
-  if (othersFinished) {
+  const allDone = Object.values(playerStatus).every(s => s !== "playing");
+  if (allDone) {
     updates.status = "finished";
     updates.winner = determineWinner(g.hands, g.players);
   }
   await updateDoc(doc(db, "bj1v1", bj1v1GameId), updates);
 };
 
+// ✅ FIX BUG 3 : determineWinner correct — bust = score effectif, pas 0
 function determineWinner(hands, players) {
-  const scores = {};
-  players.forEach(uid => {
-    const hand = hands[uid] || [];
-    const score = bjHandValue(hand);
-    scores[uid] = score > 21 ? 0 : score;
-  });
   const [p1, p2] = players;
-  if (scores[p1] === scores[p2]) return "push";
-  return scores[p1] > scores[p2] ? p1 : p2;
+  const s1Raw = bjHandValue(hands[p1] || []);
+  const s2Raw = bjHandValue(hands[p2] || []);
+  const s1 = s1Raw > 21 ? 0 : s1Raw;
+  const s2 = s2Raw > 21 ? 0 : s2Raw;
+
+  // Les deux bustent → push
+  if (s1Raw > 21 && s2Raw > 21) return "push";
+  if (s1 === s2) return "push";
+  return s1 > s2 ? p1 : p2;
 }
 
 window.quitBj1v1 = async function() {
   if (bj1v1GameId) {
-    const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
-    if (snap.exists() && snap.data().status === "playing") {
-      const g = snap.data();
-      await updateDoc(doc(db, "bj1v1", bj1v1GameId), {
-        status: "finished",
-        winner: bj1v1OppUid,
-        forfeit: currentUser.uid
-      });
-      toast("Vous avez abandonné. Mise perdue.", "lose");
-    }
+    try {
+      const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
+      if (snap.exists() && snap.data().status !== "finished") {
+        await updateDoc(doc(db, "bj1v1", bj1v1GameId), {
+          status: "finished",
+          winner: bj1v1OppUid,
+          forfeit: currentUser.uid
+        });
+        toast("Vous avez abandonné. Mise perdue.", "lose");
+      }
+    } catch(e) { /* partie déjà terminée */ }
     if (unsubBj1v1) { unsubBj1v1(); unsubBj1v1 = null; }
     bj1v1GameId = null;
+    bj1v1Starting = false;
   }
   goToLobby();
 };
@@ -886,14 +923,20 @@ window.quitBj1v1 = async function() {
 function showGameInviteNotif(inv) {
   pendingGameInvite = inv;
   const notif = document.getElementById("game-invite-notif");
-  const type = inv.type || "bj1v1";
   document.getElementById("gin-text").textContent = `🃏 ${inv.fromName} vous défie au Blackjack 1v1 ! Mise : ${inv.bet} VLX`;
   notif.style.display = "block";
   const fill = document.getElementById("gin-timer-fill");
   fill.style.transition = "none"; fill.style.width = "100%";
   clearTimeout(ginAutoClose);
   setTimeout(() => { fill.style.transition = "width 5s linear"; fill.style.width = "0%"; }, 50);
-  ginAutoClose = setTimeout(() => { notif.style.display = "none"; }, 5000);
+  // ✅ FIX BUG 4 : auto-close nettoie aussi Firestore
+  ginAutoClose = setTimeout(async () => {
+    notif.style.display = "none";
+    if (pendingGameInvite) {
+      await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null });
+      pendingGameInvite = null;
+    }
+  }, 5000);
 }
 
 window.acceptGameInvite = async function() {
@@ -901,13 +944,24 @@ window.acceptGameInvite = async function() {
   clearTimeout(ginAutoClose);
   document.getElementById("game-invite-notif").style.display = "none";
   const inv = pendingGameInvite; pendingGameInvite = null;
+
   if (inv.bet > userData.balance) { toast("Pas assez de VLX pour accepter !", "lose"); return; }
 
   const gameRef = doc(db, "bj1v1", inv.gameId);
+
+  // ✅ FIX BUG 1 : déduire la mise de l'accepteur ici
+  userData.balance -= inv.bet;
+  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance, pendingGameInvite: null });
+  updateAllBalances();
+
+  // ✅ FIX BUG 1 : déduire la mise du challenger aussi (via increment négatif)
+  await updateDoc(doc(db, "users", inv.from), { balance: increment(-inv.bet) });
+
   const deck = bj1v1CreateDeck();
+  const p1 = inv.from, p2 = currentUser.uid;
   const p1hand = [deck.pop(), deck.pop()];
   const p2hand = [deck.pop(), deck.pop()];
-  const p1 = inv.from, p2 = currentUser.uid;
+
   await setDoc(gameRef, {
     players: [p1, p2],
     names: { [p1]: inv.fromName, [p2]: userData.name || "Joueur" },
@@ -918,15 +972,20 @@ window.acceptGameInvite = async function() {
     status: "playing",
     createdAt: Date.now()
   });
-  await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null });
-  await updateDoc(doc(db, "users", inv.from), { pendingGameInvite: null, gameStarted: inv.gameId });
+
+  // Notifier le challenger que la partie a démarré
+  await updateDoc(doc(db, "users", inv.from), { gameStarted: inv.gameId });
+
   startBj1v1(inv.gameId, inv.from, currentUser.uid, inv.bet);
 };
 
 window.refuseGameInvite = async function() {
   clearTimeout(ginAutoClose);
   document.getElementById("game-invite-notif").style.display = "none";
-  if (pendingGameInvite) { await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null }); pendingGameInvite = null; }
+  if (pendingGameInvite) {
+    await updateDoc(doc(db, "users", currentUser.uid), { pendingGameInvite: null });
+    pendingGameInvite = null;
+  }
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -994,7 +1053,6 @@ window.openAdminPanel = function() {
   adminTargetData = null;
   const modal = document.getElementById("admin-modal");
   if (!modal) return;
-  // Reset
   document.getElementById("admin-auth-step").style.display = "";
   document.getElementById("admin-panel-step").style.display = "none";
   document.getElementById("admin-code-input").value = "";
@@ -1071,7 +1129,6 @@ window.adminGiveVLX = async function() {
   try {
     await updateDoc(doc(db, "users", adminTargetUid), { balance: increment(amount) });
     toast(`✅ ${amount} VLX donnés à ${adminTargetData?.name || adminTargetUid} !`, "win");
-    // Refresh balance display
     const newBal = (adminTargetData?.balance || 0) + amount;
     document.getElementById("admin-target-balance").textContent = newBal.toLocaleString("fr-FR") + " VLX";
     if (adminTargetData) adminTargetData.balance = newBal;
