@@ -20,7 +20,7 @@ let ginAutoClose = null;
 let bj1v1GameId = null;
 let bj1v1OppUid = "";
 let bj1v1Bet = 0;
-let bj1v1Starting = false; // ✅ FIX: verrou anti-double démarrage
+let bj1v1Starting = false;
 let tombolaUnsub = null;
 let tombolaTimerInterval = null;
 let tombolaData = null;
@@ -55,6 +55,8 @@ window.goToGame = function(game) {
   if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
   if (game === "joueurs") initJoueurs();
+  if (game === "crash") { showPage("crash"); return; }
+  if (game === "poker") { showPage("poker"); return; }
 
   if (game === "roulette") {
     showPage("roulette");
@@ -76,7 +78,7 @@ window.goToLobby = function() {
 function updateAllBalances() {
   if (!userData) return;
   const bal = (userData.balance || 0).toLocaleString("fr-FR") + " VLX";
-  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack"].forEach(id => {
+  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","crash","poker"].forEach(id => {
     const el = document.getElementById(id + "-balance");
     if (el) el.textContent = bal;
   });
@@ -154,7 +156,6 @@ function listenMyDoc() {
     userData = snap.data();
     updateAllBalances();
 
-    // ── Invite de jeu entrante ──
     const inv = userData.pendingGameInvite;
     if (inv && inv.from !== currentUser.uid) {
       const age = Date.now() - inv.sentAt;
@@ -163,11 +164,9 @@ function listenMyDoc() {
       }
     }
 
-    // ✅ FIX BUG 5 : verrou bj1v1Starting pour éviter double démarrage
     if (userData.gameStarted && !bj1v1GameId && !bj1v1Starting) {
       const gid = userData.gameStarted;
       bj1v1Starting = true;
-      // Effacer immédiatement pour ne pas re-trigger
       updateDoc(doc(db, "users", currentUser.uid), { gameStarted: null }).then(() => {
         getDoc(doc(db, "bj1v1", gid)).then(gs => {
           if (!gs.exists()) { bj1v1Starting = false; return; }
@@ -335,7 +334,7 @@ window.chooseSide=function(side){if(coinFlipping)return;chosenSide=side;document
 window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;userData.balance=Math.max(0,userData.balance+(won?bet:-bet));userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
 
 // ══════════════════════════════════════════════════════════════
-//  MACHINE À SOUS (SLOTS) — ×2 pour 2 pareils, ×3.5 pour 3
+//  MACHINE À SOUS
 // ══════════════════════════════════════════════════════════════
 const SLOT_SYMBOLS = ["🍒","🍋","🍊","🔔","💎","7️⃣"];
 let slotsSpinning = false;
@@ -671,14 +670,12 @@ window.sendDefiFromProfil = async function() {
   if (!bet || bet < 10) { toast("Mise minimum 10 VLX", "lose"); return; }
   if (bet > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
 
-  // ✅ FIX: Relire le doc à jour pour vérifier online
   const snap = await getDoc(doc(db, "users", profilTargetUid));
   if (!snap.exists()) { toast("Joueur introuvable", "lose"); return; }
   const target = snap.data();
   const isOnline = target.online === true && (Date.now() - (target.lastSeen||0)) < 60000;
   if (!isOnline) { toast("Ce joueur est hors ligne !", "lose"); return; }
 
-  // ✅ FIX: Vérifier si l'adversaire a déjà une invite en attente
   if (target.pendingGameInvite && (Date.now() - target.pendingGameInvite.sentAt) < 60000) {
     toast("Ce joueur a déjà un défi en attente !", "lose"); return;
   }
@@ -698,7 +695,7 @@ window.sendDefiFromProfil = async function() {
 };
 
 // ══════════════════════════════════════════════════════════════
-//  BLACKJACK 1v1 — LOGIQUE PRINCIPALE
+//  BLACKJACK 1v1
 // ══════════════════════════════════════════════════════════════
 function bj1v1CreateDeck() {
   const deck = [];
@@ -706,13 +703,11 @@ function bj1v1CreateDeck() {
   return shuffle2(deck);
 }
 
-// ✅ FIX BUG 1 : startBj1v1 ne déduit plus la mise ici
-// La mise est déduite une seule fois : accepteur dans acceptGameInvite, challenger via gameStarted
 function startBj1v1(gameId, p1uid, p2uid, bet) {
   bj1v1GameId = gameId;
   bj1v1OppUid = currentUser.uid === p1uid ? p2uid : p1uid;
   bj1v1Bet = bet;
-  bj1v1Starting = false; // libérer le verrou
+  bj1v1Starting = false;
   showPage("bj1v1");
   updateAllBalances();
 
@@ -744,7 +739,6 @@ function renderBj1v1(g) {
   const gameOver = g.status === "finished";
 
   myHand.forEach(c => myCards.appendChild(bj1v1RenderCard(c)));
-  // ✅ Cartes adversaire : toutes cachées (sauf si fini)
   oppHand.forEach(c => oppCards.appendChild(bj1v1RenderCard(c, !gameOver)));
 
   document.getElementById("bj1v1-my-score-badge").textContent = myHand.length ? bjHandValue(myHand) : "";
@@ -757,7 +751,7 @@ function renderBj1v1(g) {
   const actions = document.getElementById("bj1v1-actions");
   const statusEl = document.getElementById("bj1v1-status");
 
-  if (g.status === "finished") return; // géré par finishBj1v1
+  if (g.status === "finished") return;
 
   if (myStatus === "playing") {
     actions.style.display = "flex";
@@ -790,7 +784,6 @@ async function finishBj1v1(g) {
   const prize = bj1v1Bet * 2;
   const statusEl = document.getElementById("bj1v1-status");
 
-  // Afficher toutes les cartes
   const myCards = document.getElementById("bj1v1-my-cards");
   const oppCards = document.getElementById("bj1v1-opp-cards");
   if (myCards) { myCards.innerHTML = ""; myHand.forEach(c => myCards.appendChild(bj1v1RenderCard(c))); }
@@ -814,7 +807,6 @@ async function finishBj1v1(g) {
     updateAllBalances();
     toast(`🏆 Victoire au Blackjack 1v1 ! +${prize} VLX`, "win");
   } else {
-    // ✅ Cas forfait
     if (g.forfeit === currentUser.uid) {
       statusEl.textContent = `🏳️ Abandon — mise perdue`;
     } else {
@@ -830,7 +822,6 @@ async function finishBj1v1(g) {
   setTimeout(() => { if (currentPage === "bj1v1") goToLobby(); }, 3500);
 }
 
-// ✅ FIX BUG 2 : Hit relit le deck depuis Firestore pour éviter désync
 window.bj1v1Hit = async function() {
   if (!bj1v1GameId) return;
   const snap = await getDoc(doc(db, "bj1v1", bj1v1GameId));
@@ -839,7 +830,7 @@ window.bj1v1Hit = async function() {
   if (g.playerStatus?.[currentUser.uid] !== "playing") return;
   if (g.status === "finished") return;
 
-  const hands = JSON.parse(JSON.stringify(g.hands)); // deep copy
+  const hands = JSON.parse(JSON.stringify(g.hands));
   const deck = [...g.deck];
   const newCard = deck.pop();
   hands[currentUser.uid] = [...(hands[currentUser.uid] || []), newCard];
@@ -853,7 +844,6 @@ window.bj1v1Hit = async function() {
     updates.playerStatus = playerStatus;
     const allDone = Object.values(playerStatus).every(s => s !== "playing");
     if (allDone) {
-      // ✅ FIX BUG 3 : determineWinner amélioré
       updates.status = "finished";
       updates.winner = determineWinner(hands, g.players);
     }
@@ -883,15 +873,12 @@ window.bj1v1Stand = async function() {
   await updateDoc(doc(db, "bj1v1", bj1v1GameId), updates);
 };
 
-// ✅ FIX BUG 3 : determineWinner correct — bust = score effectif, pas 0
 function determineWinner(hands, players) {
   const [p1, p2] = players;
   const s1Raw = bjHandValue(hands[p1] || []);
   const s2Raw = bjHandValue(hands[p2] || []);
   const s1 = s1Raw > 21 ? 0 : s1Raw;
   const s2 = s2Raw > 21 ? 0 : s2Raw;
-
-  // Les deux bustent → push
   if (s1Raw > 21 && s2Raw > 21) return "push";
   if (s1 === s2) return "push";
   return s1 > s2 ? p1 : p2;
@@ -909,7 +896,7 @@ window.quitBj1v1 = async function() {
         });
         toast("Vous avez abandonné. Mise perdue.", "lose");
       }
-    } catch(e) { /* partie déjà terminée */ }
+    } catch(e) {}
     if (unsubBj1v1) { unsubBj1v1(); unsubBj1v1 = null; }
     bj1v1GameId = null;
     bj1v1Starting = false;
@@ -929,7 +916,6 @@ function showGameInviteNotif(inv) {
   fill.style.transition = "none"; fill.style.width = "100%";
   clearTimeout(ginAutoClose);
   setTimeout(() => { fill.style.transition = "width 5s linear"; fill.style.width = "0%"; }, 50);
-  // ✅ FIX BUG 4 : auto-close nettoie aussi Firestore
   ginAutoClose = setTimeout(async () => {
     notif.style.display = "none";
     if (pendingGameInvite) {
@@ -949,12 +935,10 @@ window.acceptGameInvite = async function() {
 
   const gameRef = doc(db, "bj1v1", inv.gameId);
 
-  // ✅ FIX BUG 1 : déduire la mise de l'accepteur ici
   userData.balance -= inv.bet;
   await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance, pendingGameInvite: null });
   updateAllBalances();
 
-  // ✅ FIX BUG 1 : déduire la mise du challenger aussi (via increment négatif)
   await updateDoc(doc(db, "users", inv.from), { balance: increment(-inv.bet) });
 
   const deck = bj1v1CreateDeck();
@@ -973,7 +957,6 @@ window.acceptGameInvite = async function() {
     createdAt: Date.now()
   });
 
-  // Notifier le challenger que la partie a démarré
   await updateDoc(doc(db, "users", inv.from), { gameStarted: inv.gameId });
 
   startBj1v1(inv.gameId, inv.from, currentUser.uid, inv.bet);
@@ -1136,13 +1119,586 @@ window.adminGiveVLX = async function() {
 };
 
 // ══════════════════════════════════════════════════════════════
-//  INIT SLOTS au chargement
+//  INIT SLOTS
 // ══════════════════════════════════════════════════════════════
 const slotsObserver = new MutationObserver(() => {
   if (document.getElementById("page-slots")?.classList.contains("active")) initSlots();
 });
 const slotsPage = document.getElementById("page-slots");
 if (slotsPage) slotsObserver.observe(slotsPage, { attributes: true, attributeFilter: ["class"] });
+
+// ══════════════════════════════════════════════════════════════
+//  CRASH GAME
+// ══════════════════════════════════════════════════════════════
+let crashMultiplier = 1.00;
+let crashRunning = false;
+let crashCashedOut = false;
+let crashBet = 0;
+let crashAnimFrame = null;
+let crashHistory = [];
+
+function generateCrashPoint() {
+  const r = Math.random();
+  if (r < 0.40) return 1.0 + Math.random() * 0.5;
+  if (r < 0.65) return 1.5 + Math.random() * 1.0;
+  if (r < 0.80) return 2.5 + Math.random() * 2.5;
+  if (r < 0.92) return 5 + Math.random() * 10;
+  if (r < 0.98) return 15 + Math.random() * 35;
+  return 50 + Math.random() * 150;
+}
+
+function crashDrawGraph() {
+  const canvas = document.getElementById("crash-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.04)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  const crashTarget = window._crashTarget || 2;
+  const prog = Math.min((crashMultiplier - 1) / Math.max(crashTarget - 1, 0.1), 1);
+  const endX = 40 + prog * (W - 60);
+  const endY = H - 30 - prog * (H - 60);
+
+  const crashed = !crashRunning && !crashCashedOut && window._crashTarget !== null;
+
+  ctx.beginPath();
+  ctx.moveTo(40, H - 30);
+  for (let i = 0; i <= 100; i++) {
+    const t = i / 100;
+    const x = 40 + t * (endX - 40);
+    const y = H - 30 - Math.pow(t, 1.4) * (H - 30 - endY);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(endX, H - 30);
+  ctx.closePath();
+  ctx.fillStyle = crashed ? "rgba(231,76,60,0.1)" : "rgba(39,174,96,0.08)";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(40, H - 30);
+  for (let i = 0; i <= 100; i++) {
+    const t = i / 100;
+    const x = 40 + t * (endX - 40);
+    const y = H - 30 - Math.pow(t, 1.4) * (H - 30 - endY);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = crashed ? "#e74c3c" : (crashCashedOut ? "#27ae60" : "#d4a017");
+  ctx.lineWidth = 3;
+  ctx.shadowColor = crashed ? "#e74c3c" : "#d4a017";
+  ctx.shadowBlur = 12;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.arc(endX, endY, 6, 0, Math.PI * 2);
+  ctx.fillStyle = crashed ? "#e74c3c" : (crashCashedOut ? "#27ae60" : "#f0c040");
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(255,255,255,0.3)";
+  ctx.font = "11px 'DM Mono', monospace";
+  ctx.textAlign = "left";
+  ctx.fillText("1x", 4, H - 26);
+  ctx.fillText("2x", 4, H - 26 - (H-60)*0.25);
+  ctx.fillText("5x", 4, H - 26 - (H-60)*0.5);
+  ctx.fillText("10x", 2, H - 26 - (H-60)*0.75);
+}
+
+window.startCrash = async function() {
+  if (crashRunning) return;
+  const bet = parseBet("crash-bet");
+  if (!bet) return;
+  crashBet = bet;
+  crashMultiplier = 1.00;
+  crashCashedOut = false;
+  window._crashTarget = generateCrashPoint();
+  userData.balance -= bet;
+  updateAllBalances();
+
+  crashRunning = true;
+  document.getElementById("crash-start-btn").style.display = "none";
+  document.getElementById("crash-cashout-btn").style.display = "block";
+  document.getElementById("crash-cashout-btn").disabled = false;
+  document.getElementById("crash-status").textContent = "";
+  document.getElementById("crash-status").className = "crash-status";
+
+  const startTime = Date.now();
+
+  function tick() {
+    if (!crashRunning) return;
+    const elapsed = (Date.now() - startTime) / 1000;
+    crashMultiplier = Math.round(Math.pow(1.07, elapsed * 8) * 100) / 100;
+
+    const multEl = document.getElementById("crash-multiplier");
+    if (multEl) {
+      multEl.textContent = crashMultiplier.toFixed(2) + "×";
+      multEl.className = "crash-multiplier-display " + (crashMultiplier >= 5 ? "hot" : crashMultiplier >= 2 ? "warm" : "");
+    }
+
+    const potEl = document.getElementById("crash-potential");
+    if (potEl) potEl.textContent = Math.round(crashBet * crashMultiplier) + " VLX";
+
+    crashDrawGraph();
+
+    if (crashMultiplier >= window._crashTarget) {
+      endCrash();
+      return;
+    }
+    crashAnimFrame = requestAnimationFrame(tick);
+  }
+  crashAnimFrame = requestAnimationFrame(tick);
+};
+
+window.cashoutCrash = async function() {
+  if (!crashRunning || crashCashedOut) return;
+  crashCashedOut = true;
+  crashRunning = false;
+  cancelAnimationFrame(crashAnimFrame);
+
+  const win = Math.round(crashBet * crashMultiplier);
+  userData.balance += win;
+  userData.gamesPlayed++;
+  await saveUserData();
+
+  crashHistory.unshift({ mult: crashMultiplier.toFixed(2), win: true });
+  if (crashHistory.length > 8) crashHistory.pop();
+  renderCrashHistory();
+
+  const statusEl = document.getElementById("crash-status");
+  statusEl.textContent = `💰 Cashout ! +${win} VLX (×${crashMultiplier.toFixed(2)})`;
+  statusEl.className = "crash-status win";
+  toast(`💰 Crash cashout ! +${win} VLX (×${crashMultiplier.toFixed(2)})`, "win");
+
+  document.getElementById("crash-cashout-btn").style.display = "none";
+  document.getElementById("crash-start-btn").style.display = "block";
+  crashDrawGraph();
+};
+
+async function endCrash() {
+  crashRunning = false;
+  cancelAnimationFrame(crashAnimFrame);
+  const crashTarget = window._crashTarget;
+
+  crashHistory.unshift({ mult: crashTarget.toFixed(2), win: false });
+  if (crashHistory.length > 8) crashHistory.pop();
+  renderCrashHistory();
+
+  const statusEl = document.getElementById("crash-status");
+  statusEl.textContent = `💥 CRASH à ×${crashTarget.toFixed(2)} — Perdu ${crashBet} VLX`;
+  statusEl.className = "crash-status lose";
+  toast(`💥 CRASH à ×${crashTarget.toFixed(2)} ! Perdu ${crashBet} VLX`, "lose");
+
+  userData.gamesPlayed++;
+  await saveUserData();
+  crashDrawGraph();
+
+  document.getElementById("crash-cashout-btn").style.display = "none";
+  document.getElementById("crash-start-btn").style.display = "block";
+}
+
+function renderCrashHistory() {
+  const el = document.getElementById("crash-history");
+  if (!el) return;
+  el.innerHTML = crashHistory.map(h =>
+    `<span class="crash-hist-item ${h.win ? 'win' : (parseFloat(h.mult) < 2 ? 'low' : 'mid')}">×${h.mult}</span>`
+  ).join("");
+}
+
+const crashObserver = new MutationObserver(() => {
+  if (document.getElementById("page-crash")?.classList.contains("active")) {
+    crashMultiplier = 1.00;
+    crashRunning = false;
+    crashCashedOut = false;
+    window._crashTarget = null;
+    const multEl = document.getElementById("crash-multiplier");
+    if (multEl) { multEl.textContent = "1.00×"; multEl.className = "crash-multiplier-display"; }
+    const potEl = document.getElementById("crash-potential");
+    if (potEl) potEl.textContent = "—";
+    const statusEl = document.getElementById("crash-status");
+    if (statusEl) statusEl.textContent = "";
+    const cashoutBtn = document.getElementById("crash-cashout-btn");
+    if (cashoutBtn) cashoutBtn.style.display = "none";
+    const startBtn = document.getElementById("crash-start-btn");
+    if (startBtn) startBtn.style.display = "block";
+    setTimeout(() => crashDrawGraph(), 50);
+  }
+});
+const crashPage = document.getElementById("page-crash");
+if (crashPage) crashObserver.observe(crashPage, { attributes: true, attributeFilter: ["class"] });
+
+// ══════════════════════════════════════════════════════════════
+//  POKER TEXAS HOLD'EM
+// ══════════════════════════════════════════════════════════════
+const POKER_SUITS = ["♠","♥","♦","♣"];
+const POKER_VALUES = ["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
+const POKER_VAL_MAP = {"2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":11,"Q":12,"K":13,"A":14};
+let pokerState = null;
+
+function pokerCreateDeck() {
+  const deck = [];
+  for (const s of POKER_SUITS) for (const v of POKER_VALUES) deck.push({suit:s,val:v});
+  return shuffle2(deck);
+}
+
+function pokerCardValue(v) { return POKER_VAL_MAP[v] || 0; }
+
+function pokerBestHand(cards) {
+  const combos = [];
+  const n = cards.length;
+  for (let i = 0; i < n-4; i++)
+    for (let j = i+1; j < n-3; j++)
+      for (let k = j+1; k < n-2; k++)
+        for (let l = k+1; l < n-1; l++)
+          for (let m = l+1; m < n; m++)
+            combos.push([cards[i],cards[j],cards[k],cards[l],cards[m]]);
+  let best = null, bestScore = -1;
+  for (const combo of combos) {
+    const score = pokerEval5(combo);
+    if (score > bestScore) { bestScore = score; best = combo; }
+  }
+  return { score: bestScore, hand: best };
+}
+
+function pokerEval5(hand) {
+  const vals = hand.map(c => pokerCardValue(c.val)).sort((a,b)=>b-a);
+  const suits = hand.map(c => c.suit);
+  const isFlush = suits.every(s => s === suits[0]);
+  const isStraight = vals.every((v,i) => i===0 || vals[i-1]-v===1) ||
+    (vals[0]===14 && vals[1]===5 && vals[2]===4 && vals[3]===3 && vals[4]===2);
+  const counts = {};
+  vals.forEach(v => counts[v] = (counts[v]||0)+1);
+  const groups = Object.values(counts).sort((a,b)=>b-a);
+  const topVal = vals[0];
+  if (isFlush && isStraight) return 8000000 + topVal;
+  if (groups[0]===4) return 7000000 + topVal;
+  if (groups[0]===3 && groups[1]===2) return 6000000 + topVal;
+  if (isFlush) return 5000000 + topVal;
+  if (isStraight) return 4000000 + topVal;
+  if (groups[0]===3) return 3000000 + topVal;
+  if (groups[0]===2 && groups[1]===2) return 2000000 + topVal;
+  if (groups[0]===2) return 1000000 + topVal;
+  return topVal;
+}
+
+function pokerHandName(score) {
+  if (score >= 8000000) return "Quinte Flush";
+  if (score >= 7000000) return "Carré";
+  if (score >= 6000000) return "Full House";
+  if (score >= 5000000) return "Couleur";
+  if (score >= 4000000) return "Quinte";
+  if (score >= 3000000) return "Brelan";
+  if (score >= 2000000) return "Double Paire";
+  if (score >= 1000000) return "Paire";
+  return "Hauteur";
+}
+
+function pokerRenderCard(card, hidden=false) {
+  const div = document.createElement("div");
+  if (hidden) { div.className = "bj-card bj-card-back"; return div; }
+  div.className = "bj-card " + (["♥","♦"].includes(card.suit) ? "red" : "black");
+  div.innerHTML = `<div><div class="bj-card-val">${card.val}</div><div class="bj-card-suit">${card.suit}</div></div><div class="bj-card-center">${card.suit}</div><div style="transform:rotate(180deg)"><div class="bj-card-val">${card.val}</div><div class="bj-card-suit">${card.suit}</div></div>`;
+  return div;
+}
+
+function pokerRender() {
+  if (!pokerState) return;
+  const s = pokerState;
+
+  const communityEl = document.getElementById("poker-community");
+  if (communityEl) {
+    communityEl.innerHTML = "";
+    const shown = s.phase==="preflop"?0:s.phase==="flop"?3:s.phase==="turn"?4:5;
+    for (let i = 0; i < 5; i++) {
+      if (i < shown) communityEl.appendChild(pokerRenderCard(s.community[i]));
+      else { const ph = document.createElement("div"); ph.className="bj-card poker-placeholder"; communityEl.appendChild(ph); }
+    }
+  }
+
+  const playerEl = document.getElementById("poker-player-cards");
+  if (playerEl) { playerEl.innerHTML = ""; s.playerHand.forEach(c => playerEl.appendChild(pokerRenderCard(c))); }
+
+  [0,1].forEach(i => {
+    const el = document.getElementById(`poker-bot${i}-cards`);
+    if (!el) return;
+    el.innerHTML = "";
+    if (s.bots[i].folded) { el.innerHTML = '<span class="poker-folded-label">COUCHÉ</span>'; return; }
+    const show = s.phase === "showdown";
+    s.bots[i].hand.forEach(c => el.appendChild(pokerRenderCard(c, !show)));
+  });
+
+  const potEl = document.getElementById("poker-pot");
+  if (potEl) potEl.textContent = s.pot + " VLX";
+  const betEl = document.getElementById("poker-current-bet");
+  if (betEl) betEl.textContent = "Mise actuelle : " + s.currentBet + " VLX";
+  const playerChipsEl = document.getElementById("poker-player-chips");
+  if (playerChipsEl) playerChipsEl.textContent = s.playerChips + " VLX";
+
+  const phaseEl = document.getElementById("poker-phase");
+  if (phaseEl) {
+    const phases = {preflop:"Pre-Flop",flop:"Flop",turn:"Turn",river:"River",showdown:"Showdown"};
+    phaseEl.textContent = phases[s.phase] || s.phase;
+  }
+
+  const actionsEl = document.getElementById("poker-actions");
+  const statusEl = document.getElementById("poker-status");
+  if (s.phase === "showdown") {
+    if (actionsEl) actionsEl.style.display = "none";
+  } else if (s.playerTurn) {
+    if (actionsEl) actionsEl.style.display = "flex";
+    const callBtn = document.getElementById("poker-call-btn");
+    const checkBtn = document.getElementById("poker-check-btn");
+    const toCall = s.currentBet - s.playerBetThisRound;
+    if (callBtn) { callBtn.textContent = toCall > 0 ? `📞 Suivre (${toCall} VLX)` : "📞 Suivre"; callBtn.disabled = toCall > s.playerChips; }
+    if (checkBtn) checkBtn.style.display = toCall === 0 ? "flex" : "none";
+    if (callBtn) callBtn.style.display = toCall > 0 ? "flex" : "none";
+    if (statusEl) { statusEl.textContent = "🎯 À votre tour !"; statusEl.className = "poker-status your-turn"; }
+  } else {
+    if (actionsEl) actionsEl.style.display = "none";
+    if (statusEl) { statusEl.textContent = "⏳ Les bots réfléchissent..."; statusEl.className = "poker-status waiting"; }
+  }
+
+  if (s.phase !== "preflop") {
+    const allCards = [...s.playerHand, ...s.community.slice(0, s.phase==="flop"?3:s.phase==="turn"?4:5)];
+    const { score } = pokerBestHand(allCards);
+    const handNameEl = document.getElementById("poker-hand-name");
+    if (handNameEl) handNameEl.textContent = pokerHandName(score);
+  }
+}
+
+window.startPoker = function() {
+  const buyIn = parseInt(document.getElementById("poker-buyin").value) || 500;
+  if (buyIn < 100) { toast("Buy-in minimum : 100 VLX", "lose"); return; }
+  if (buyIn > userData.balance) { toast("Solde insuffisant !", "lose"); return; }
+
+  userData.balance -= buyIn;
+  updateAllBalances();
+
+  const deck = pokerCreateDeck();
+  const smallBlind = Math.max(10, Math.floor(buyIn * 0.02));
+  const bigBlind = smallBlind * 2;
+
+  pokerState = {
+    deck,
+    phase: "preflop",
+    playerHand: [deck.pop(), deck.pop()],
+    bots: [
+      { hand: [deck.pop(), deck.pop()], chips: buyIn, folded: false, betThisRound: 0 },
+      { hand: [deck.pop(), deck.pop()], chips: buyIn, folded: false, betThisRound: 0 }
+    ],
+    community: [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()],
+    pot: 0,
+    playerChips: buyIn,
+    playerBetThisRound: 0,
+    currentBet: bigBlind,
+    smallBlind, bigBlind,
+    playerTurn: true,
+    raiseCount: 0
+  };
+
+  pokerState.pot += smallBlind + bigBlind;
+  pokerState.bots[0].chips -= smallBlind;
+  pokerState.bots[1].chips -= bigBlind;
+  pokerState.bots[0].betThisRound = smallBlind;
+  pokerState.bots[1].betThisRound = bigBlind;
+
+  document.getElementById("poker-lobby").style.display = "none";
+  document.getElementById("poker-table").style.display = "flex";
+  document.getElementById("poker-status").textContent = "🎯 À votre tour !";
+  document.getElementById("poker-status").className = "poker-status your-turn";
+  pokerRender();
+};
+
+window.pokerFold = function() {
+  if (!pokerState?.playerTurn) return;
+  pokerState.playerTurn = false;
+  const statusEl = document.getElementById("poker-status");
+  statusEl.textContent = "🏳️ Vous avez couché.";
+  statusEl.className = "poker-status lose";
+  document.getElementById("poker-actions").style.display = "none";
+  userData.gamesPlayed++;
+  saveUserData();
+  pokerRender();
+  setTimeout(pokerShowNewHandBtn, 1500);
+};
+
+window.pokerCheck = function() {
+  if (!pokerState?.playerTurn) return;
+  pokerState.playerTurn = false;
+  pokerRender();
+  setTimeout(pokerBotsAct, 700);
+};
+
+window.pokerCall = function() {
+  if (!pokerState?.playerTurn) return;
+  const toCall = Math.min(pokerState.currentBet - pokerState.playerBetThisRound, pokerState.playerChips);
+  pokerState.playerChips -= toCall;
+  pokerState.pot += toCall;
+  pokerState.playerBetThisRound += toCall;
+  pokerState.playerTurn = false;
+  pokerRender();
+  setTimeout(pokerBotsAct, 700);
+};
+
+window.pokerRaise = function() {
+  if (!pokerState?.playerTurn || pokerState.raiseCount >= 3) return;
+  const raiseAmount = pokerState.bigBlind * 2 * (pokerState.raiseCount + 1);
+  const toCall = pokerState.currentBet - pokerState.playerBetThisRound;
+  const total = toCall + raiseAmount;
+  if (total > pokerState.playerChips) { toast("Pas assez de VLX pour relancer !", "lose"); return; }
+  pokerState.playerChips -= total;
+  pokerState.pot += total;
+  pokerState.playerBetThisRound += total;
+  pokerState.currentBet += raiseAmount;
+  pokerState.raiseCount++;
+  pokerState.playerTurn = false;
+  pokerRender();
+  setTimeout(pokerBotsAct, 700);
+};
+
+async function pokerBotsAct() {
+  if (!pokerState) return;
+  for (let i = 0; i < 2; i++) {
+    const bot = pokerState.bots[i];
+    if (bot.folded || bot.chips <= 0) continue;
+    const allCards = [...bot.hand, ...pokerState.community.slice(0, pokerState.phase==="flop"?3:pokerState.phase==="turn"?4:5)];
+    let handStrength = pokerState.phase === "preflop"
+      ? (pokerCardValue(bot.hand[0].val) + pokerCardValue(bot.hand[1].val)) / 28
+      : pokerBestHand(allCards).score / 9000000;
+    const toCall = pokerState.currentBet - bot.betThisRound;
+    const rand = Math.random();
+    if (handStrength > 0.7) {
+      const raise = Math.min(pokerState.bigBlind * 2, bot.chips);
+      const total = toCall + raise;
+      if (total <= bot.chips) { bot.chips -= total; pokerState.pot += total; bot.betThisRound += total; pokerState.currentBet += raise; }
+      else { bot.chips -= toCall; pokerState.pot += toCall; bot.betThisRound += toCall; }
+    } else if (handStrength > 0.4 || rand > 0.35) {
+      const call = Math.min(toCall, bot.chips);
+      bot.chips -= call; pokerState.pot += call; bot.betThisRound += call;
+    } else {
+      if (toCall > pokerState.bigBlind) bot.folded = true;
+      else { const call = Math.min(toCall, bot.chips); bot.chips -= call; pokerState.pot += call; bot.betThisRound += call; }
+    }
+    pokerRender();
+    await delay(400);
+  }
+  pokerNextPhase();
+}
+
+function pokerNextPhase() {
+  if (!pokerState) return;
+  pokerState.playerBetThisRound = 0;
+  pokerState.bots.forEach(b => b.betThisRound = 0);
+  pokerState.currentBet = 0;
+  pokerState.raiseCount = 0;
+  const activeBots = pokerState.bots.filter(b => !b.folded);
+  if (activeBots.length === 0) { pokerState.phase = "showdown"; pokerRender(); pokerShowResult(); return; }
+  const phases = ["preflop","flop","turn","river","showdown"];
+  const idx = phases.indexOf(pokerState.phase);
+  if (idx >= 3) { pokerState.phase = "showdown"; pokerRender(); setTimeout(pokerShowResult, 600); return; }
+  pokerState.phase = phases[idx + 1];
+  pokerState.playerTurn = true;
+  pokerRender();
+}
+
+function pokerShowResult() {
+  if (!pokerState) return;
+  pokerState.phase = "showdown";
+  pokerState.playerTurn = false;
+  pokerRender();
+  const activeBots = pokerState.bots.filter(b => !b.folded);
+  const statusEl = document.getElementById("poker-status");
+  const actEl = document.getElementById("poker-actions");
+  if (actEl) actEl.style.display = "none";
+
+  if (activeBots.length === 0) {
+    const win = pokerState.pot;
+    userData.balance += win; userData.gamesPlayed++;
+    saveUserData();
+    if (statusEl) { statusEl.textContent = `🏆 Tous les bots ont couché ! +${win} VLX`; statusEl.className = "poker-status win"; }
+    toast(`🏆 Vous remportez le pot ! +${win} VLX`, "win");
+    setTimeout(pokerShowNewHandBtn, 2500);
+    return;
+  }
+
+  const communityAll = pokerState.community;
+  const playerAll = [...pokerState.playerHand, ...communityAll];
+  const { score: playerScore } = pokerBestHand(playerAll);
+  let bestBotScore = -1;
+  activeBots.forEach(bot => {
+    const { score } = pokerBestHand([...bot.hand, ...communityAll]);
+    if (score > bestBotScore) bestBotScore = score;
+  });
+
+  const pot = pokerState.pot;
+  if (playerScore > bestBotScore) {
+    userData.balance += pot; userData.gamesPlayed++; saveUserData();
+    if (statusEl) { statusEl.textContent = `🏆 Victoire ! ${pokerHandName(playerScore)} — +${pot} VLX`; statusEl.className = "poker-status win"; }
+    toast(`🏆 Poker gagné ! ${pokerHandName(playerScore)} — +${pot} VLX`, "win");
+  } else if (playerScore === bestBotScore) {
+    const half = Math.floor(pot / 2);
+    userData.balance += half; userData.gamesPlayed++; saveUserData();
+    if (statusEl) { statusEl.textContent = `🤝 Égalité ! +${half} VLX remboursés`; statusEl.className = "poker-status push"; }
+    toast("Égalité au poker !", "");
+  } else {
+    userData.gamesPlayed++; saveUserData();
+    if (statusEl) { statusEl.textContent = `💀 Défaite — ${pokerHandName(playerScore)} vs ${pokerHandName(bestBotScore)}`; statusEl.className = "poker-status lose"; }
+    toast(`Défaite — ${pokerHandName(playerScore)} vs ${pokerHandName(bestBotScore)}`, "lose");
+  }
+  setTimeout(pokerShowNewHandBtn, 2500);
+}
+
+function pokerShowNewHandBtn() {
+  const btn = document.getElementById("poker-new-hand-btn");
+  if (btn) btn.style.display = "block";
+}
+
+window.pokerNewHand = function() {
+  document.getElementById("poker-new-hand-btn").style.display = "none";
+  if (userData.balance < 100 && pokerState.playerChips < 100) {
+    toast("Plus assez de VLX !", "lose"); pokerQuit(); return;
+  }
+  const deck = pokerCreateDeck();
+  const prevChips = pokerState?.playerChips || 500;
+  const smallBlind = Math.max(10, Math.floor(prevChips * 0.02));
+  const bigBlind = smallBlind * 2;
+  pokerState = {
+    deck, phase: "preflop",
+    playerHand: [deck.pop(), deck.pop()],
+    bots: [
+      { hand: [deck.pop(), deck.pop()], chips: pokerState?.bots[0]?.chips || 500, folded: false, betThisRound: 0 },
+      { hand: [deck.pop(), deck.pop()], chips: pokerState?.bots[1]?.chips || 500, folded: false, betThisRound: 0 }
+    ],
+    community: [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()],
+    pot: 0, playerChips: prevChips, playerBetThisRound: 0,
+    currentBet: bigBlind, smallBlind, bigBlind, playerTurn: true, raiseCount: 0
+  };
+  pokerState.pot += smallBlind + bigBlind;
+  pokerState.bots[0].chips -= smallBlind;
+  pokerState.bots[1].chips -= bigBlind;
+  pokerState.bots[0].betThisRound = smallBlind;
+  pokerState.bots[1].betThisRound = bigBlind;
+  const statusEl = document.getElementById("poker-status");
+  if (statusEl) { statusEl.textContent = "🎯 À votre tour !"; statusEl.className = "poker-status your-turn"; }
+  pokerRender();
+};
+
+window.pokerQuit = function() {
+  if (pokerState?.playerChips > 0) {
+    userData.balance += pokerState.playerChips;
+    updateAllBalances();
+    toast(`Vous quittez avec ${pokerState.playerChips} VLX`, "");
+    saveUserData();
+  }
+  pokerState = null;
+  document.getElementById("poker-lobby").style.display = "flex";
+  document.getElementById("poker-table").style.display = "none";
+};
 
 // ══════════════════════════════════════════════════════════════
 //  UTILS
