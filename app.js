@@ -55,7 +55,7 @@ window.goToGame = function(game) {
   if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
   if (game === "joueurs") initJoueurs();
-  if (game === "crash") { showPage("crash"); return; }
+  if (game === "bourse") { showPage("bourse"); initBourse(); return; }
   if (game === "poker") { showPage("poker"); return; }
 
   if (game === "roulette") {
@@ -78,7 +78,7 @@ window.goToLobby = function() {
 function updateAllBalances() {
   if (!userData) return;
   const bal = (userData.balance || 0).toLocaleString("fr-FR") + " VLX";
-  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","crash","poker"].forEach(id => {
+  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","bourse","poker"].forEach(id => {
     const el = document.getElementById(id + "-balance");
     if (el) el.textContent = bal;
   });
@@ -1128,209 +1128,233 @@ const slotsPage = document.getElementById("page-slots");
 if (slotsPage) slotsObserver.observe(slotsPage, { attributes: true, attributeFilter: ["class"] });
 
 // ══════════════════════════════════════════════════════════════
-//  CRASH GAME
+//  BOURSE VLX — JEU D'INVESTISSEMENT
 // ══════════════════════════════════════════════════════════════
-let crashMultiplier = 1.00;
-let crashRunning = false;
-let crashCashedOut = false;
-let crashBet = 0;
-let crashAnimFrame = null;
-let crashHistory = [];
+const BOURSE_STOCKS = [
+  { id: "vlxtech",  name: "VLX Tech",     icon: "💻", sector: "Tech",     basePrice: 120, volatility: 0.06, drift: -0.008 },
+  { id: "goldcorp", name: "Gold Corp",    icon: "🥇", sector: "Matières", basePrice: 85,  volatility: 0.035, drift: -0.004 },
+  { id: "cryptox",  name: "CryptoX",      icon: "🪙", sector: "Crypto",   basePrice: 200, volatility: 0.12, drift: -0.015 },
+  { id: "energyp",  name: "Energy Plus",  icon: "⚡", sector: "Énergie",  basePrice: 60,  volatility: 0.05, drift: -0.006 },
+  { id: "vlxbank",  name: "VLX Bank",     icon: "🏦", sector: "Finance",  basePrice: 150, volatility: 0.03, drift: -0.003 },
+];
 
-function generateCrashPoint() {
-  const r = Math.random();
-  if (r < 0.40) return 1.0 + Math.random() * 0.5;
-  if (r < 0.65) return 1.5 + Math.random() * 1.0;
-  if (r < 0.80) return 2.5 + Math.random() * 2.5;
-  if (r < 0.92) return 5 + Math.random() * 10;
-  if (r < 0.98) return 15 + Math.random() * 35;
-  return 50 + Math.random() * 150;
+let bourseState = {
+  prices: {},       // id → prix actuel
+  history: {},      // id → [derniers prix]
+  portfolio: {},    // id → { shares, avgPrice }
+  selectedStock: null,
+  interval: null,
+  tick: 0,
+  crashPending: false,
+};
+
+const BOURSE_NEWS_GOOD = [
+  "📰 VLX Tech annonce un nouveau partenariat stratégique !",
+  "📰 Gold Corp dépasse les prévisions trimestrielles.",
+  "📰 CryptoX intègre un nouveau protocole de sécurité.",
+  "📰 Energy Plus signe un contrat gouvernemental majeur.",
+  "📰 VLX Bank ouvre 50 nouvelles agences en Europe.",
+];
+const BOURSE_NEWS_BAD = [
+  "📉 Régulateurs enquêtent sur plusieurs sociétés cotées.",
+  "📉 Inflation en hausse — les marchés s'inquiètent.",
+  "📉 Vague de ventes massives sur les marchés émergents.",
+  "📉 Rumeurs de récession font chuter les indices.",
+  "📉 Scandale comptable secoue le secteur financier.",
+  "📉 KRACH ÉCLAIR — panique généralisée sur les marchés !",
+];
+
+function initBourse() {
+  if (bourseState.interval) return; // déjà initialisé
+  BOURSE_STOCKS.forEach(s => {
+    bourseState.prices[s.id] = s.basePrice;
+    bourseState.history[s.id] = [s.basePrice];
+    if (!bourseState.portfolio[s.id]) bourseState.portfolio[s.id] = { shares: 0, invested: 0 };
+  });
+  bourseRenderStocks();
+  bourseRenderPortfolio();
+  bourseState.interval = setInterval(bourseTick, 2500);
 }
 
-function crashDrawGraph() {
-  const canvas = document.getElementById("crash-canvas");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
+function bourseTick() {
+  bourseState.tick++;
+  let marketEvent = null;
 
-  ctx.strokeStyle = "rgba(255,255,255,0.04)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-
-  const crashTarget = window._crashTarget || 2;
-  const prog = Math.min((crashMultiplier - 1) / Math.max(crashTarget - 1, 0.1), 1);
-  const endX = 40 + prog * (W - 60);
-  const endY = H - 30 - prog * (H - 60);
-
-  const crashed = !crashRunning && !crashCashedOut && window._crashTarget !== null;
-
-  ctx.beginPath();
-  ctx.moveTo(40, H - 30);
-  for (let i = 0; i <= 100; i++) {
-    const t = i / 100;
-    const x = 40 + t * (endX - 40);
-    const y = H - 30 - Math.pow(t, 1.4) * (H - 30 - endY);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  // Événement marché aléatoire ~toutes les 20 ticks
+  if (Math.random() < 0.05) {
+    const isCrash = Math.random() < 0.55; // 55% chance mauvaise news
+    marketEvent = isCrash
+      ? BOURSE_NEWS_BAD[Math.floor(Math.random() * BOURSE_NEWS_BAD.length)]
+      : BOURSE_NEWS_GOOD[Math.floor(Math.random() * BOURSE_NEWS_GOOD.length)];
+    const isMajorCrash = marketEvent.includes("KRACH");
+    BOURSE_STOCKS.forEach(s => {
+      let shock = isMajorCrash
+        ? -(0.15 + Math.random() * 0.25)
+        : isCrash
+          ? -(0.04 + Math.random() * 0.08)
+          : (0.03 + Math.random() * 0.06);
+      bourseState.prices[s.id] = Math.max(5, bourseState.prices[s.id] * (1 + shock));
+    });
+    bourseShowNews(marketEvent, isCrash);
+  } else {
+    // Mouvement normal avec drift négatif (avantage maison)
+    BOURSE_STOCKS.forEach(s => {
+      const change = s.drift + (Math.random() - 0.48) * s.volatility * 2;
+      bourseState.prices[s.id] = Math.max(5, Math.round(bourseState.prices[s.id] * (1 + change) * 100) / 100);
+    });
   }
-  ctx.lineTo(endX, H - 30);
-  ctx.closePath();
-  ctx.fillStyle = crashed ? "rgba(231,76,60,0.1)" : "rgba(39,174,96,0.08)";
-  ctx.fill();
 
-  ctx.beginPath();
-  ctx.moveTo(40, H - 30);
-  for (let i = 0; i <= 100; i++) {
-    const t = i / 100;
-    const x = 40 + t * (endX - 40);
-    const y = H - 30 - Math.pow(t, 1.4) * (H - 30 - endY);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  // Historique
+  BOURSE_STOCKS.forEach(s => {
+    bourseState.history[s.id].push(bourseState.prices[s.id]);
+    if (bourseState.history[s.id].length > 20) bourseState.history[s.id].shift();
+  });
+
+  // Reset partiel vers base toutes les 60 ticks pour éviter prix absurdes
+  if (bourseState.tick % 60 === 0) {
+    BOURSE_STOCKS.forEach(s => {
+      bourseState.prices[s.id] = s.basePrice * (0.7 + Math.random() * 0.6);
+    });
   }
-  ctx.strokeStyle = crashed ? "#e74c3c" : (crashCashedOut ? "#27ae60" : "#d4a017");
-  ctx.lineWidth = 3;
-  ctx.shadowColor = crashed ? "#e74c3c" : "#d4a017";
-  ctx.shadowBlur = 12;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
 
-  ctx.beginPath();
-  ctx.arc(endX, endY, 6, 0, Math.PI * 2);
-  ctx.fillStyle = crashed ? "#e74c3c" : (crashCashedOut ? "#27ae60" : "#f0c040");
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(255,255,255,0.3)";
-  ctx.font = "11px 'DM Mono', monospace";
-  ctx.textAlign = "left";
-  ctx.fillText("1x", 4, H - 26);
-  ctx.fillText("2x", 4, H - 26 - (H-60)*0.25);
-  ctx.fillText("5x", 4, H - 26 - (H-60)*0.5);
-  ctx.fillText("10x", 2, H - 26 - (H-60)*0.75);
+  bourseRenderStocks();
+  bourseRenderPortfolio();
 }
 
-window.startCrash = async function() {
-  if (crashRunning) return;
-  const bet = parseBet("crash-bet");
+function bourseRenderStocks() {
+  const grid = document.getElementById("bourse-stocks-grid");
+  if (!grid) return;
+  grid.innerHTML = BOURSE_STOCKS.map(s => {
+    const price = bourseState.prices[s.id];
+    const hist = bourseState.history[s.id];
+    const prev = hist.length > 1 ? hist[hist.length - 2] : price;
+    const diff = price - prev;
+    const pct = ((diff / prev) * 100).toFixed(2);
+    const trend = diff >= 0 ? "up" : "down";
+    const miniChart = bourseMiniChart(hist);
+    const selected = bourseState.selectedStock === s.id ? " bourse-stock-selected" : "";
+    return `<div class="bourse-stock-card${selected}" onclick="bourseSelectStock('${s.id}')">
+      <div class="bsc-top">
+        <span class="bsc-icon">${s.icon}</span>
+        <span class="bsc-name">${s.name}</span>
+        <span class="bsc-sector">${s.sector}</span>
+      </div>
+      <div class="bsc-price-row">
+        <span class="bsc-price">${price.toFixed(1)} VLX</span>
+        <span class="bsc-change ${trend}">${diff >= 0 ? "+" : ""}${pct}%</span>
+      </div>
+      <div class="bsc-chart">${miniChart}</div>
+    </div>`;
+  }).join("");
+}
+
+function bourseMiniChart(hist) {
+  if (hist.length < 2) return "";
+  const W = 120, H = 36;
+  const min = Math.min(...hist), max = Math.max(...hist);
+  const range = max - min || 1;
+  const pts = hist.map((v, i) => {
+    const x = (i / (hist.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 4) - 2;
+    return `${x},${y}`;
+  }).join(" ");
+  const lastColor = hist[hist.length - 1] >= hist[0] ? "#27ae60" : "#e74c3c";
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><polyline points="${pts}" fill="none" stroke="${lastColor}" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+
+window.bourseSelectStock = function(id) {
+  bourseState.selectedStock = id;
+  const s = BOURSE_STOCKS.find(x => x.id === id);
+  const price = bourseState.prices[id];
+  const infoEl = document.getElementById("bourse-selected-stock");
+  const btn = document.getElementById("bourse-buy-btn");
+  if (infoEl) infoEl.textContent = `${s.icon} ${s.name} — Prix actuel : ${price.toFixed(1)} VLX/action`;
+  if (btn) btn.disabled = false;
+  bourseRenderStocks();
+};
+
+window.bourseAcheter = function() {
+  if (!bourseState.selectedStock) return;
+  const bet = parseBet("bourse-bet");
   if (!bet) return;
-  crashBet = bet;
-  crashMultiplier = 1.00;
-  crashCashedOut = false;
-  window._crashTarget = generateCrashPoint();
+  const s = BOURSE_STOCKS.find(x => x.id === bourseState.selectedStock);
+  const price = bourseState.prices[s.id];
+  const shares = bet / price;
   userData.balance -= bet;
+  bourseState.portfolio[s.id].shares += shares;
+  bourseState.portfolio[s.id].invested += bet;
   updateAllBalances();
-
-  crashRunning = true;
-  document.getElementById("crash-start-btn").style.display = "none";
-  document.getElementById("crash-cashout-btn").style.display = "block";
-  document.getElementById("crash-cashout-btn").disabled = false;
-  document.getElementById("crash-status").textContent = "";
-  document.getElementById("crash-status").className = "crash-status";
-
-  const startTime = Date.now();
-
-  function tick() {
-    if (!crashRunning) return;
-    const elapsed = (Date.now() - startTime) / 1000;
-    crashMultiplier = Math.round(Math.pow(1.07, elapsed * 8) * 100) / 100;
-
-    const multEl = document.getElementById("crash-multiplier");
-    if (multEl) {
-      multEl.textContent = crashMultiplier.toFixed(2) + "×";
-      multEl.className = "crash-multiplier-display " + (crashMultiplier >= 5 ? "hot" : crashMultiplier >= 2 ? "warm" : "");
-    }
-
-    const potEl = document.getElementById("crash-potential");
-    if (potEl) potEl.textContent = Math.round(crashBet * crashMultiplier) + " VLX";
-
-    crashDrawGraph();
-
-    if (crashMultiplier >= window._crashTarget) {
-      endCrash();
-      return;
-    }
-    crashAnimFrame = requestAnimationFrame(tick);
-  }
-  crashAnimFrame = requestAnimationFrame(tick);
+  toast(`📈 Acheté ${shares.toFixed(3)} ${s.name} pour ${bet} VLX`, "win");
+  bourseRenderPortfolio();
 };
 
-window.cashoutCrash = async function() {
-  if (!crashRunning || crashCashedOut) return;
-  crashCashedOut = true;
-  crashRunning = false;
-  cancelAnimationFrame(crashAnimFrame);
-
-  const win = Math.round(crashBet * crashMultiplier);
-  userData.balance += win;
+window.bourseVendre = function(id) {
+  const pos = bourseState.portfolio[id];
+  if (!pos || pos.shares <= 0) return;
+  const s = BOURSE_STOCKS.find(x => x.id === id);
+  const price = bourseState.prices[id];
+  const value = Math.round(pos.shares * price);
+  const gain = value - Math.round(pos.invested);
+  userData.balance += value;
   userData.gamesPlayed++;
-  await saveUserData();
-
-  crashHistory.unshift({ mult: crashMultiplier.toFixed(2), win: true });
-  if (crashHistory.length > 8) crashHistory.pop();
-  renderCrashHistory();
-
-  const statusEl = document.getElementById("crash-status");
-  statusEl.textContent = `💰 Cashout ! +${win} VLX (×${crashMultiplier.toFixed(2)})`;
-  statusEl.className = "crash-status win";
-  toast(`💰 Crash cashout ! +${win} VLX (×${crashMultiplier.toFixed(2)})`, "win");
-
-  document.getElementById("crash-cashout-btn").style.display = "none";
-  document.getElementById("crash-start-btn").style.display = "block";
-  crashDrawGraph();
+  saveUserData();
+  bourseState.portfolio[id] = { shares: 0, invested: 0 };
+  const type = gain >= 0 ? "win" : "lose";
+  toast(`${gain >= 0 ? "💰" : "📉"} Vendu ${s.name} — ${gain >= 0 ? "+" : ""}${gain} VLX`, type);
+  bourseRenderPortfolio();
 };
 
-async function endCrash() {
-  crashRunning = false;
-  cancelAnimationFrame(crashAnimFrame);
-  const crashTarget = window._crashTarget;
-
-  crashHistory.unshift({ mult: crashTarget.toFixed(2), win: false });
-  if (crashHistory.length > 8) crashHistory.pop();
-  renderCrashHistory();
-
-  const statusEl = document.getElementById("crash-status");
-  statusEl.textContent = `💥 CRASH à ×${crashTarget.toFixed(2)} — Perdu ${crashBet} VLX`;
-  statusEl.className = "crash-status lose";
-  toast(`💥 CRASH à ×${crashTarget.toFixed(2)} ! Perdu ${crashBet} VLX`, "lose");
-
-  userData.gamesPlayed++;
-  await saveUserData();
-  crashDrawGraph();
-
-  document.getElementById("crash-cashout-btn").style.display = "none";
-  document.getElementById("crash-start-btn").style.display = "block";
-}
-
-function renderCrashHistory() {
-  const el = document.getElementById("crash-history");
+function bourseRenderPortfolio() {
+  const el = document.getElementById("bourse-portfolio-list");
   if (!el) return;
-  el.innerHTML = crashHistory.map(h =>
-    `<span class="crash-hist-item ${h.win ? 'win' : (parseFloat(h.mult) < 2 ? 'low' : 'mid')}">×${h.mult}</span>`
-  ).join("");
+  const positions = BOURSE_STOCKS.filter(s => bourseState.portfolio[s.id]?.shares > 0.0001);
+  if (positions.length === 0) {
+    el.innerHTML = `<div class="lb-loading">Aucune position ouverte.</div>`;
+    return;
+  }
+  el.innerHTML = positions.map(s => {
+    const pos = bourseState.portfolio[s.id];
+    const curVal = pos.shares * bourseState.prices[s.id];
+    const gain = curVal - pos.invested;
+    const pct = ((gain / pos.invested) * 100).toFixed(1);
+    const cls = gain >= 0 ? "up" : "down";
+    return `<div class="bourse-position-row">
+      <span class="bsc-icon">${s.icon}</span>
+      <div class="bourse-pos-info">
+        <span class="bourse-pos-name">${s.name}</span>
+        <span class="bourse-pos-detail">${pos.shares.toFixed(3)} actions · Investi: ${Math.round(pos.invested)} VLX</span>
+      </div>
+      <div class="bourse-pos-value">
+        <span class="bourse-pos-cur">${Math.round(curVal)} VLX</span>
+        <span class="bsc-change ${cls}">${gain >= 0 ? "+" : ""}${gain.toFixed(0)} (${pct}%)</span>
+      </div>
+      <button class="btn-cashout bourse-sell-btn" onclick="bourseVendre('${s.id}')">💸 VENDRE</button>
+    </div>`;
+  }).join("");
 }
 
-const crashObserver = new MutationObserver(() => {
-  if (document.getElementById("page-crash")?.classList.contains("active")) {
-    crashMultiplier = 1.00;
-    crashRunning = false;
-    crashCashedOut = false;
-    window._crashTarget = null;
-    const multEl = document.getElementById("crash-multiplier");
-    if (multEl) { multEl.textContent = "1.00×"; multEl.className = "crash-multiplier-display"; }
-    const potEl = document.getElementById("crash-potential");
-    if (potEl) potEl.textContent = "—";
-    const statusEl = document.getElementById("crash-status");
-    if (statusEl) statusEl.textContent = "";
-    const cashoutBtn = document.getElementById("crash-cashout-btn");
-    if (cashoutBtn) cashoutBtn.style.display = "none";
-    const startBtn = document.getElementById("crash-start-btn");
-    if (startBtn) startBtn.style.display = "block";
-    setTimeout(() => crashDrawGraph(), 50);
+function bourseShowNews(msg, isBad) {
+  const el = document.getElementById("bourse-news");
+  if (!el) return;
+  const div = document.createElement("div");
+  div.className = "bourse-news-item " + (isBad ? "bad" : "good");
+  div.textContent = msg;
+  el.prepend(div);
+  setTimeout(() => div.remove(), 8000);
+}
+
+// Nettoyage quand on quitte la page
+const bourseObserver = new MutationObserver(() => {
+  const page = document.getElementById("page-bourse");
+  if (!page) return;
+  if (!page.classList.contains("active")) {
+    if (bourseState.interval) { clearInterval(bourseState.interval); bourseState.interval = null; }
   }
 });
-const crashPage = document.getElementById("page-crash");
-if (crashPage) crashObserver.observe(crashPage, { attributes: true, attributeFilter: ["class"] });
+const boursePage = document.getElementById("page-bourse");
+if (boursePage) bourseObserver.observe(boursePage, { attributes: true, attributeFilter: ["class"] });
+
+
 
 // ══════════════════════════════════════════════════════════════
 //  POKER TEXAS HOLD'EM
