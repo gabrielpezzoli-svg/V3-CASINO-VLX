@@ -111,12 +111,12 @@
         <div class="gc-desc">50 VLX / ticket · Tirage toutes les 24h</div>
         <div class="gc-play">PARTICIPER →</div>
       </div>
-      <!-- NOUVEAU : CRASH -->
-      <div class="game-card crash-card" onclick="goToGame('crash')">
-        <div class="gc-icon">🚀</div>
-        <div class="gc-name">Crash</div>
-        <div class="gc-desc">Cashout avant le crash · Plus tu attends, plus tu gagnes</div>
-        <div class="gc-play">JOUER →</div>
+      <!-- BOURSE -->
+      <div class="game-card crash-card" onclick="goToGame('bourse')">
+        <div class="gc-icon">📈</div>
+        <div class="gc-name">Bourse VLX</div>
+        <div class="gc-desc">Achetez des actions · Le marché fluctue · Vendez au bon moment</div>
+        <div class="gc-play">INVESTIR →</div>
       </div>
       <!-- NOUVEAU : POKER -->
       <div class="game-card poker-card" onclick="goToGame('poker')">
@@ -487,34 +487,39 @@
   </div>
 </div>
 
-<!-- PAGE CRASH -->
-<div id="page-crash" class="page game-page">
+<!-- PAGE BOURSE -->
+<div id="page-bourse" class="page game-page">
   <div class="game-topbar">
     <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">🚀 Crash</div>
-    <div id="crash-balance" class="topbar-balance">0 VLX</div>
+    <div class="game-topbar-title">📈 Bourse VLX</div>
+    <div id="bourse-balance" class="topbar-balance">0 VLX</div>
   </div>
-  <div class="game-content crash-content">
-    <div id="crash-history" class="crash-history"></div>
-    <div class="crash-multiplier-wrap">
-      <div id="crash-multiplier" class="crash-multiplier-display">1.00×</div>
-      <div class="crash-potential-row">Gain potentiel : <span id="crash-potential" class="crash-potential-val">—</span></div>
+  <div class="game-content bourse-content">
+    <div class="bourse-market-status">
+      <span id="bourse-market-label" class="bourse-market-open">● MARCHÉ OUVERT</span>
+      <span id="bourse-ticker" class="bourse-ticker"></span>
     </div>
-    <canvas id="crash-canvas" width="560" height="220" class="crash-canvas"></canvas>
-    <div id="crash-status" class="crash-status"></div>
-    <div class="bet-panel">
-      <label class="bet-label">Mise (VLX)</label>
+    <div class="bourse-stocks-grid" id="bourse-stocks-grid"></div>
+    <div class="bourse-portfolio-box">
+      <div class="bourse-portfolio-title">📊 Mon Portefeuille</div>
+      <div id="bourse-portfolio-list" class="bourse-portfolio-list">
+        <div class="lb-loading">Aucune position ouverte.</div>
+      </div>
+    </div>
+    <div class="bet-panel" style="max-width:420px">
+      <label class="bet-label">Montant à investir (VLX)</label>
       <div class="bet-row">
-        <input type="number" id="crash-bet" class="bet-input" value="100" min="10"/>
+        <input type="number" id="bourse-bet" class="bet-input" value="200" min="50"/>
         <div class="quick-bets">
-          <button onclick="quickBet('crash-bet',0.5)">½</button>
-          <button onclick="quickBet('crash-bet',2)">×2</button>
-          <button onclick="setMax('crash-bet')">MAX</button>
+          <button onclick="quickBet('bourse-bet',0.5)">½</button>
+          <button onclick="quickBet('bourse-bet',2)">×2</button>
+          <button onclick="setMax('bourse-bet')">MAX</button>
         </div>
       </div>
-      <button id="crash-start-btn" class="btn-play" onclick="startCrash()">🚀 LANCER</button>
-      <button id="crash-cashout-btn" class="btn-cashout" onclick="cashoutCrash()" style="display:none">💰 CASHOUT</button>
+      <div id="bourse-selected-stock" class="bourse-selected-info">← Sélectionne une action ci-dessus</div>
+      <button id="bourse-buy-btn" class="btn-play" onclick="bourseAcheter()" disabled>📈 ACHETER</button>
     </div>
+    <div id="bourse-news" class="bourse-news-feed"></div>
   </div>
 </div>
 
