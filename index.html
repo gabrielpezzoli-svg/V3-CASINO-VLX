@@ -601,12 +601,16 @@
           <div id="admin-target-name" style="font-weight:700;color:var(--text)"></div>
           <div id="admin-target-balance" style="font-family:var(--ff-mono);color:var(--gold2);font-size:.9rem"></div>
         </div>
-        <label class="bet-label">Montant à donner (VLX)</label>
+        <label class="bet-label">Montant (VLX)</label>
         <div class="bet-row">
           <input type="number" id="admin-give-amount" class="bet-input" value="1000" min="1"/>
         </div>
         <div class="admin-modal-btns">
-          <button class="btn-admin-add" onclick="adminGiveVLX()">💰 DONNER LES VLX</button>
+          <button class="btn-admin-add" onclick="adminGiveVLX()">💰 DONNER</button>
+          <button class="btn-admin-remove" onclick="adminRemoveVLX()">🔻 RETIRER</button>
+        </div>
+        <div class="admin-modal-btns" style="margin-top:.4rem">
+          <button class="btn-admin-set" onclick="adminSetVLX()">📝 DÉFINIR LE SOLDE</button>
           <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
         </div>
       </div>
