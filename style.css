@@ -69,6 +69,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .tombola-card::after{background:linear-gradient(90deg,#9b59b6,transparent);}
 .tombola-card .gc-name{color:#c084fc;}
 .tombola-card:hover .gc-play{color:#c084fc;}
+.poker-card::after{background:linear-gradient(90deg,#3498db,transparent);}
+.poker-card .gc-name{color:#3498db;}
+.poker-card:hover .gc-play{color:#3498db;}
 
 /* ── GAME PAGES ── */
 .game-page{background:var(--bg);}
@@ -343,33 +346,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
 
 /* ══════════════════════════════════════════════════════════════
-   CRASH GAME
-══════════════════════════════════════════════════════════════ */
-.crash-card::after{background:linear-gradient(90deg,#e74c3c,transparent);}
-.crash-card .gc-name{color:#e74c3c;}
-.crash-card:hover .gc-play{color:#e74c3c;}
-.poker-card::after{background:linear-gradient(90deg,#3498db,transparent);}
-.poker-card .gc-name{color:#3498db;}
-.poker-card:hover .gc-play{color:#3498db;}
-.crash-content{gap:1.2rem !important;padding-top:1.2rem !important;max-width:600px !important;}
-.crash-history{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;min-height:28px;}
-.crash-hist-item{font-family:var(--ff-mono);font-size:.8rem;font-weight:700;padding:.2rem .6rem;border-radius:20px;border:1px solid transparent;}
-.crash-hist-item.win{background:rgba(39,174,96,.15);border-color:rgba(39,174,96,.4);color:#27ae60;}
-.crash-hist-item.low{background:rgba(231,76,60,.15);border-color:rgba(231,76,60,.4);color:#e74c3c;}
-.crash-hist-item.mid{background:rgba(212,160,23,.15);border-color:rgba(212,160,23,.4);color:#d4a017;}
-.crash-multiplier-wrap{text-align:center;display:flex;flex-direction:column;align-items:center;gap:.3rem;}
-.crash-multiplier-display{font-family:var(--ff-mono);font-size:4.5rem;font-weight:700;color:var(--gold2);line-height:1;transition:color .2s;text-shadow:0 0 30px rgba(212,160,23,.4);}
-.crash-multiplier-display.warm{color:#f39c12;text-shadow:0 0 30px rgba(243,156,18,.5);}
-.crash-multiplier-display.hot{color:#e74c3c;text-shadow:0 0 30px rgba(231,76,60,.6);animation:crashPulse .3s ease-in-out infinite alternate;}
-@keyframes crashPulse{from{transform:scale(1)}to{transform:scale(1.04)}}
-.crash-potential-row{font-size:.9rem;color:var(--text2);}
-.crash-potential-val{font-family:var(--ff-mono);color:var(--gold2);font-weight:700;}
-.crash-canvas{width:min(560px,90vw);height:min(220px,35vw);background:#0a0a0f;border:1px solid var(--border);border-radius:8px;}
-.crash-status{font-family:var(--ff-display);font-size:1.1rem;text-align:center;min-height:1.6rem;padding:.4rem 1.2rem;border-radius:6px;}
-.crash-status.win{color:var(--gold2);background:rgba(212,160,23,.08);border:1px solid var(--gold);}
-.crash-status.lose{color:var(--red2);background:rgba(231,76,60,.08);border:1px solid var(--red2);}
-
-/* ══════════════════════════════════════════════════════════════
    POKER TEXAS HOLD'EM
 ══════════════════════════════════════════════════════════════ */
 .poker-content{gap:1rem !important;padding-top:1.2rem !important;max-width:700px !important;justify-content:flex-start !important;}
@@ -408,41 +384,3 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .poker-cards{justify-content:center;}
 .poker-actions{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;width:100%;max-width:500px;}
 .poker-actions .bj-btn{flex:1;min-width:100px;}
-
-/* ══════════════════════════════════════════════════════════════
-   BOURSE VLX
-══════════════════════════════════════════════════════════════ */
-.bourse-content{display:flex;flex-direction:column;align-items:center;gap:1.2rem;width:100%;padding:1rem 0 2rem;}
-.bourse-market-status{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:620px;font-size:.8rem;gap:1rem;}
-.bourse-market-open{color:#27ae60;font-weight:700;font-family:var(--ff-mono);letter-spacing:.12em;animation:pulse 2s infinite;}
-.bourse-ticker{font-family:var(--ff-mono);font-size:.75rem;color:var(--text2);overflow:hidden;white-space:nowrap;}
-.bourse-stocks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.75rem;width:100%;max-width:620px;}
-.bourse-stock-card{background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:.75rem;cursor:pointer;transition:border-color .2s,transform .15s;display:flex;flex-direction:column;gap:.4rem;}
-.bourse-stock-card:hover{border-color:rgba(212,160,23,.5);transform:translateY(-2px);}
-.bourse-stock-card.bourse-stock-selected{border-color:var(--gold);background:rgba(212,160,23,.07);}
-.bsc-top{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;}
-.bsc-icon{font-size:1.1rem;}
-.bsc-name{font-weight:700;font-size:.85rem;color:var(--text);flex:1;}
-.bsc-sector{font-size:.65rem;color:var(--text2);background:rgba(255,255,255,.06);padding:.1rem .4rem;border-radius:3px;text-transform:uppercase;letter-spacing:.08em;}
-.bsc-price-row{display:flex;align-items:center;justify-content:space-between;}
-.bsc-price{font-family:var(--ff-mono);font-size:.95rem;color:var(--gold2);font-weight:700;}
-.bsc-change{font-family:var(--ff-mono);font-size:.8rem;font-weight:700;}
-.bsc-change.up{color:#27ae60;}
-.bsc-change.down{color:#e74c3c;}
-.bsc-chart{display:flex;align-items:center;justify-content:center;height:38px;}
-.bourse-selected-info{font-size:.85rem;color:var(--text2);text-align:center;padding:.4rem;font-family:var(--ff-mono);}
-.bourse-portfolio-box{width:100%;max-width:620px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem;}
-.bourse-portfolio-title{font-family:var(--ff-display);font-size:.9rem;letter-spacing:.1em;color:var(--gold2);margin-bottom:.7rem;text-transform:uppercase;}
-.bourse-portfolio-list{display:flex;flex-direction:column;gap:.5rem;}
-.bourse-position-row{display:flex;align-items:center;gap:.7rem;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;flex-wrap:wrap;}
-.bourse-pos-info{display:flex;flex-direction:column;flex:1;min-width:100px;}
-.bourse-pos-name{font-weight:700;font-size:.85rem;color:var(--text);}
-.bourse-pos-detail{font-family:var(--ff-mono);font-size:.7rem;color:var(--text2);}
-.bourse-pos-value{display:flex;flex-direction:column;align-items:flex-end;gap:.1rem;}
-.bourse-pos-cur{font-family:var(--ff-mono);font-size:.9rem;color:var(--gold2);font-weight:700;}
-.bourse-sell-btn{padding:.35rem .7rem;font-size:.75rem;min-width:80px;margin-left:auto;}
-.bourse-news-feed{position:fixed;bottom:80px;right:16px;display:flex;flex-direction:column;gap:.4rem;z-index:999;pointer-events:none;max-width:280px;}
-.bourse-news-item{padding:.55rem 1rem;border-radius:8px;font-size:.78rem;font-weight:600;animation:slideInRight .4s ease;opacity:0.95;}
-.bourse-news-item.good{background:rgba(39,174,96,.18);border:1px solid rgba(39,174,96,.5);color:#2ecc71;}
-.bourse-news-item.bad{background:rgba(231,76,60,.18);border:1px solid rgba(231,76,60,.5);color:#e74c3c;}
-@keyframes slideInRight{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:.95}}
