@@ -1117,6 +1117,33 @@ window.adminGiveVLX = async function() {
   } catch(e) { toast("Erreur lors du don", "lose"); }
 };
 
+window.adminRemoveVLX = async function() {
+  if (!adminAuthenticated || !adminTargetUid) return;
+  const amount = parseInt(document.getElementById("admin-give-amount").value);
+  if (!amount || amount < 1) { toast("Montant invalide", "lose"); return; }
+  const currentBal = adminTargetData?.balance || 0;
+  const newBal = Math.max(0, currentBal - amount);
+  try {
+    await updateDoc(doc(db, "users", adminTargetUid), { balance: newBal });
+    const removed = currentBal - newBal;
+    toast(`🔻 ${removed} VLX retirés à ${adminTargetData?.name || adminTargetUid} !`, "lose");
+    document.getElementById("admin-target-balance").textContent = newBal.toLocaleString("fr-FR") + " VLX";
+    if (adminTargetData) adminTargetData.balance = newBal;
+  } catch(e) { toast("Erreur lors du retrait", "lose"); }
+};
+
+window.adminSetVLX = async function() {
+  if (!adminAuthenticated || !adminTargetUid) return;
+  const amount = parseInt(document.getElementById("admin-give-amount").value);
+  if (amount === undefined || amount < 0) { toast("Montant invalide", "lose"); return; }
+  try {
+    await updateDoc(doc(db, "users", adminTargetUid), { balance: amount });
+    toast(`📝 Solde de ${adminTargetData?.name || adminTargetUid} défini à ${amount} VLX`, "win");
+    document.getElementById("admin-target-balance").textContent = amount.toLocaleString("fr-FR") + " VLX";
+    if (adminTargetData) adminTargetData.balance = amount;
+  } catch(e) { toast("Erreur lors de la modification", "lose"); }
+};
+
 // ══════════════════════════════════════════════════════════════
 //  INIT SLOTS
 // ══════════════════════════════════════════════════════════════
