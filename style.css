@@ -307,6 +307,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .admin-modal-btns{display:flex;gap:.6rem;}
 .btn-admin-add{flex:1;padding:.8rem;background:linear-gradient(135deg,var(--green),#145a32);border:none;border-radius:4px;color:#fff;font-family:var(--ff-body);font-size:.95rem;font-weight:700;cursor:pointer;transition:.2s;}
 .btn-admin-add:hover{filter:brightness(1.2);}
+.btn-admin-remove{flex:1;padding:.8rem;background:linear-gradient(135deg,var(--red),#6b0000);border:none;border-radius:4px;color:#fff;font-family:var(--ff-body);font-size:.95rem;font-weight:700;cursor:pointer;transition:.2s;}
+.btn-admin-remove:hover{filter:brightness(1.2);}
+.btn-admin-set{flex:1;padding:.8rem;background:linear-gradient(135deg,#1a6fb5,#0a3a6b);border:none;border-radius:4px;color:#fff;font-family:var(--ff-body);font-size:.95rem;font-weight:700;cursor:pointer;transition:.2s;}
+.btn-admin-set:hover{filter:brightness(1.2);}
 .btn-admin-close{flex:1;padding:.8rem;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:4px;cursor:pointer;font-family:var(--ff-body);font-size:.95rem;transition:.2s;}
 .btn-admin-close:hover{border-color:var(--text);color:var(--text);}
 .admin-player-result{display:flex;align-items:center;gap:.8rem;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:.6rem .8rem;cursor:pointer;transition:.2s;font-size:.9rem;}
