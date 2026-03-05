@@ -111,14 +111,6 @@
         <div class="gc-desc">50 VLX / ticket · Tirage toutes les 24h</div>
         <div class="gc-play">PARTICIPER →</div>
       </div>
-      <!-- BOURSE -->
-      <div class="game-card crash-card" onclick="goToGame('bourse')">
-        <div class="gc-icon">📈</div>
-        <div class="gc-name">Bourse VLX</div>
-        <div class="gc-desc">Achetez des actions · Le marché fluctue · Vendez au bon moment</div>
-        <div class="gc-play">INVESTIR →</div>
-      </div>
-      <!-- NOUVEAU : POKER -->
       <div class="game-card poker-card" onclick="goToGame('poker')">
         <div class="gc-icon">♠️</div>
         <div class="gc-name">Poker</div>
@@ -484,42 +476,6 @@
       <button class="bj-btn bj-btn-stand" onclick="bj1v1Stand()">✋ RESTER</button>
     </div>
     <div id="bj1v1-info" class="bj1v1-info"></div>
-  </div>
-</div>
-
-<!-- PAGE BOURSE -->
-<div id="page-bourse" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">📈 Bourse VLX</div>
-    <div id="bourse-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content bourse-content">
-    <div class="bourse-market-status">
-      <span id="bourse-market-label" class="bourse-market-open">● MARCHÉ OUVERT</span>
-      <span id="bourse-ticker" class="bourse-ticker"></span>
-    </div>
-    <div class="bourse-stocks-grid" id="bourse-stocks-grid"></div>
-    <div class="bourse-portfolio-box">
-      <div class="bourse-portfolio-title">📊 Mon Portefeuille</div>
-      <div id="bourse-portfolio-list" class="bourse-portfolio-list">
-        <div class="lb-loading">Aucune position ouverte.</div>
-      </div>
-    </div>
-    <div class="bet-panel" style="max-width:420px">
-      <label class="bet-label">Montant à investir (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="bourse-bet" class="bet-input" value="200" min="50"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('bourse-bet',0.5)">½</button>
-          <button onclick="quickBet('bourse-bet',2)">×2</button>
-          <button onclick="setMax('bourse-bet')">MAX</button>
-        </div>
-      </div>
-      <div id="bourse-selected-stock" class="bourse-selected-info">← Sélectionne une action ci-dessus</div>
-      <button id="bourse-buy-btn" class="btn-play" onclick="bourseAcheter()" disabled>📈 ACHETER</button>
-    </div>
-    <div id="bourse-news" class="bourse-news-feed"></div>
   </div>
 </div>
 
