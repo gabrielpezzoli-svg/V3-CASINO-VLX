@@ -117,6 +117,12 @@
         <div class="gc-desc">Texas Hold'em · vs 2 bots · Stratégie & bluff</div>
         <div class="gc-play">JOUER →</div>
       </div>
+      <div class="game-card bourse-card" onclick="goToGame('bourse')">
+        <div class="gc-icon">📈</div>
+        <div class="gc-name">Bourse Crypto</div>
+        <div class="gc-desc">6 cryptos · Achetez bas, vendez haut · Courbes en direct</div>
+        <div class="gc-play">INVESTIR →</div>
+      </div>
     </div>
   </div>
 </div>
@@ -549,6 +555,34 @@
         <button class="bj-btn bj-btn-stand" onclick="pokerFold()">🏳️ Coucher</button>
       </div>
       <button id="poker-new-hand-btn" class="btn-play" onclick="pokerNewHand()" style="display:none;max-width:300px;">🔄 Nouvelle main</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE BOURSE -->
+<div id="page-bourse" class="page game-page">
+  <div class="game-topbar">
+    <button class="back-btn" onclick="stopBourse(); goToLobby();">← Retour</button>
+    <div class="game-topbar-title">📈 Bourse Crypto</div>
+    <div id="bourse-balance" class="topbar-balance">0 VLX</div>
+  </div>
+  <div class="game-content bourse-content">
+    <div class="bourse-layout">
+      <div class="bourse-left">
+        <div class="bourse-section-title">📊 Marchés en direct</div>
+        <div id="bourse-assets-list" class="bourse-assets-list">
+          <div class="lb-loading">Connexion aux marchés...</div>
+        </div>
+      </div>
+      <div class="bourse-right">
+        <div id="bourse-detail-panel" class="bourse-detail-panel">
+          <div class="bourse-placeholder">
+            <span style="font-size:3rem">📈</span>
+            <div style="color:var(--text2);font-size:.95rem;margin-top:.5rem">Sélectionne un actif dans la liste</div>
+          </div>
+        </div>
+        <div id="bourse-portfolio" class="bourse-portfolio"></div>
+      </div>
     </div>
   </div>
 </div>
