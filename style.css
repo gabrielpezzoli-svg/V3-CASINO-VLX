@@ -72,6 +72,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .poker-card::after{background:linear-gradient(90deg,#3498db,transparent);}
 .poker-card .gc-name{color:#3498db;}
 .poker-card:hover .gc-play{color:#3498db;}
+.bourse-card::after{background:linear-gradient(90deg,#27ae60,transparent);}
+.bourse-card .gc-name{color:#2ecc71;}
+.bourse-card:hover .gc-play{color:#2ecc71;}
 
 /* ── GAME PAGES ── */
 .game-page{background:var(--bg);}
@@ -154,7 +157,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .red-btn{border-color:var(--red2);color:var(--red2);}
 .red-btn:hover,.red-btn.selected{background:var(--red2);color:#fff;}
 
-/* ══ MACHINE À SOUS ══════════════════════════════════════════ */
+/* ══ MACHINE À SOUS ══ */
 .slots-machine{background:linear-gradient(160deg,#1a1a28,#0f0f18);border:2px solid var(--gold);border-radius:16px;padding:1.5rem;width:min(380px,92vw);box-shadow:0 0 40px rgba(212,160,23,.2), inset 0 0 30px rgba(0,0,0,.5);}
 .slots-top-bar{display:flex;justify-content:space-between;font-family:var(--ff-display);font-size:.9rem;font-weight:700;color:var(--gold);letter-spacing:.15em;padding:.3rem .5rem 1rem;border-bottom:1px solid rgba(212,160,23,.2);margin-bottom:1rem;}
 .slots-reels-wrap{position:relative;background:#0a0a0f;border:2px solid var(--border);border-radius:8px;padding:.5rem;overflow:hidden;}
@@ -173,7 +176,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .slots-pay-row:last-child{border-bottom:none;}
 .slots-pay-mult{font-family:var(--ff-mono);color:var(--gold2);font-weight:700;}
 
-/* ══ BLACKJACK ══════════════════════════════════════════════ */
+/* ══ BLACKJACK ══ */
 .bj-content{gap:1.5rem !important;padding-top:1.5rem !important;}
 .bj-area{width:100%;background:radial-gradient(ellipse at center,#0d3b1a,#071a0e);border:2px solid rgba(39,174,96,.3);border-radius:16px;padding:1.5rem;display:flex;flex-direction:column;gap:1rem;box-shadow:0 0 30px rgba(39,174,96,.1);}
 .bj-dealer-zone,.bj-player-zone{display:flex;flex-direction:column;gap:.6rem;}
@@ -204,7 +207,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .bj-btn-double:hover{filter:brightness(1.1);}
 .bj-btn:disabled{opacity:.3;cursor:not-allowed;}
 
-/* ══ BLACKJACK 1v1 ══════════════════════════════════════════ */
+/* ══ BLACKJACK 1v1 ══ */
 .bj1v1-content{gap:1.2rem !important;padding-top:1.2rem !important;}
 .bj1v1-status{text-align:center;font-family:var(--ff-display);font-size:1.2rem;padding:.7rem 1.5rem;border-radius:6px;background:rgba(0,0,0,.3);border:1px solid var(--border);color:var(--text2);width:100%;max-width:600px;}
 .bj1v1-status.your-turn{color:var(--green2);border-color:var(--green2);}
@@ -388,3 +391,221 @@ body{background:var(--bg);color:var(--text);font-family:var(--ff-body);min-heigh
 .poker-cards{justify-content:center;}
 .poker-actions{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;width:100%;max-width:500px;}
 .poker-actions .bj-btn{flex:1;min-width:100px;}
+
+/* ══════════════════════════════════════════════════════════════
+   BOURSE D'INVESTISSEMENT CRYPTO
+══════════════════════════════════════════════════════════════ */
+.bourse-content {
+  gap: 1rem !important;
+  padding: 1.2rem !important;
+  justify-content: flex-start !important;
+  max-width: 1100px !important;
+  width: 100%;
+  margin: 0 auto;
+  align-items: flex-start !important;
+}
+
+.bourse-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 1.2rem;
+  width: 100%;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .bourse-layout { grid-template-columns: 1fr; }
+}
+
+.bourse-section-title {
+  font-size: .72rem;
+  letter-spacing: .2em;
+  color: var(--text2);
+  text-transform: uppercase;
+  margin-bottom: .7rem;
+  font-weight: 700;
+}
+
+/* ── Asset list (colonne gauche) ── */
+.bourse-assets-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.bourse-asset-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--asset-color, var(--gold));
+  border-radius: 8px;
+  padding: .75rem 1rem;
+  cursor: pointer;
+  transition: all .2s;
+}
+.bourse-asset-card:hover { background: rgba(255,255,255,.03); box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.bourse-asset-card.selected {
+  background: rgba(255,255,255,.05);
+  border-right-color: var(--asset-color, var(--gold));
+  border-top-color: var(--asset-color, var(--gold));
+  border-bottom-color: var(--asset-color, var(--gold));
+  box-shadow: 0 0 18px rgba(0,0,0,.5);
+}
+
+.bac-header { display: flex; align-items: center; gap: .75rem; }
+.bac-emoji { font-size: 1.4rem; flex-shrink: 0; }
+.bac-names { flex: 1; }
+.bac-name { font-weight: 700; font-size: .9rem; color: var(--text); }
+.bac-id { font-family: var(--ff-mono); font-size: .68rem; color: var(--text2); letter-spacing: .06em; }
+.bac-right { text-align: right; min-width: 90px; }
+.bac-price { font-family: var(--ff-mono); font-size: .85rem; color: var(--gold2); }
+.bac-change { font-size: .75rem; font-weight: 700; }
+.bac-change.up { color: #27ae60; }
+.bac-change.down { color: #e74c3c; }
+.bac-chart { margin-top: .4rem; opacity: .9; border-radius: 3px; overflow: hidden; }
+
+/* ── Colonne droite ── */
+.bourse-right { display: flex; flex-direction: column; gap: 1rem; }
+
+/* ── Panneau détail + achat ── */
+.bourse-detail-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 160px;
+}
+
+.bourse-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  color: var(--text2);
+}
+
+.bourse-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.bourse-detail-emoji { font-size: 2.4rem; flex-shrink: 0; }
+.bourse-detail-info { flex: 1; }
+.bourse-detail-name {
+  font-family: var(--ff-display);
+  font-size: 1.25rem;
+  color: var(--text);
+  margin-bottom: .2rem;
+}
+.bourse-detail-price {
+  font-family: var(--ff-mono);
+  font-size: 1.5rem;
+  color: var(--gold2);
+  line-height: 1;
+}
+.bourse-detail-change {
+  font-size: .82rem;
+  font-weight: 700;
+  margin-top: .25rem;
+}
+.bourse-detail-change.up { color: #27ae60; }
+.bourse-detail-change.down { color: #e74c3c; }
+.bourse-detail-meta { font-size: .75rem; color: var(--text2); margin-top: .15rem; }
+
+.bourse-big-chart {
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0,0,0,.2);
+  border: 1px solid var(--border);
+}
+
+.bourse-buy-panel { display: flex; flex-direction: column; gap: .5rem; }
+.bourse-buy-panel .bet-panel { max-width: 100%; width: 100%; margin: 0; }
+
+.bourse-tick-info {
+  font-size: .72rem;
+  color: var(--text2);
+  text-align: center;
+  font-family: var(--ff-mono);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .3rem .6rem;
+}
+
+/* ── Portefeuille ── */
+.bourse-portfolio { display: flex; flex-direction: column; gap: .5rem; }
+
+.bourse-portfolio-title {
+  font-size: .72rem;
+  letter-spacing: .2em;
+  color: var(--text2);
+  text-transform: uppercase;
+  margin-bottom: .2rem;
+  font-weight: 700;
+}
+
+.bourse-empty {
+  color: var(--text2);
+  font-size: .9rem;
+  text-align: center;
+  padding: 1.2rem;
+  background: var(--bg3);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.bourse-inv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .8rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .85rem 1rem;
+  flex-wrap: wrap;
+  transition: .2s;
+}
+.bourse-inv-row:hover { border-color: rgba(255,255,255,.15); }
+
+.bir-left { display: flex; align-items: center; gap: .7rem; }
+.bir-emoji { font-size: 1.4rem; }
+.bir-name { font-weight: 700; font-size: .9rem; color: var(--text); }
+.bir-detail { font-size: .72rem; color: var(--text2); font-family: var(--ff-mono); margin-top: .1rem; }
+
+.bir-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .2rem;
+}
+.bir-value { font-family: var(--ff-mono); font-size: .92rem; color: var(--gold2); }
+.bir-profit { font-size: .78rem; font-weight: 700; }
+.bir-profit.up { color: #27ae60; }
+.bir-profit.down { color: #e74c3c; }
+
+.btn-bourse-sell {
+  margin-top: .25rem;
+  padding: .35rem .85rem;
+  background: linear-gradient(135deg, var(--green), #145a32);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-family: var(--ff-body);
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .2s;
+  letter-spacing: .05em;
+}
+.btn-bourse-sell:hover { filter: brightness(1.2); transform: translateY(-1px); }
+
+/* Animation pulsation portefeuille */
+@keyframes bourseProfit {
+  0%,100% { box-shadow: 0 0 0 0 rgba(39,174,96,0); }
+  50%      { box-shadow: 0 0 10px 2px rgba(39,174,96,.25); }
+}
+.bourse-inv-row.profit-up { animation: bourseProfit 2s ease-in-out; }
