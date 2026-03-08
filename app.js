@@ -1538,8 +1538,10 @@ const BOURSE_ASSETS = [
 ];
 
 const BOURSE_HISTORY_LEN = 40;
-const BOURSE_UPDATE_MS   = 30000; // tick toutes les 30s
+const BOURSE_UPDATE_MS   = 10000; // tick toutes les 10s
 
+// bourseMarketData est volontairement en dehors de initBourse
+// pour survivre aux changements de page (lobby → bourse → lobby → bourse)
 let bourseMarketData     = null;   // { assets: { id: { price, history[] } }, lastUpdate }
 let bourseInvestments    = [];
 let bourseSelectedId     = BOURSE_ASSETS[0].id;
@@ -1592,19 +1594,20 @@ function tickBoursePricesLocal() {
 async function initBourse() {
   stopBourse();
   showPage("bourse");
-  bourseSelectedId = BOURSE_ASSETS[0].id;
+  // On ne remet PAS bourseSelectedId à 0 pour garder la sélection
+  // On ne recrée PAS le marché s'il existe déjà (prix conservés entre les pages)
 
-  // Charger les investissements depuis Firestore
+  // Recharger les investissements (au cas où une vente/achat a eu lieu ailleurs)
   await loadBourseInvestments();
 
-  // Si le marché n'existe pas encore (première visite), le créer localement
+  // Créer le marché seulement si c'est la toute première fois
   if (!bourseMarketData) {
     createBourseMarketLocal();
   }
 
   renderBourse();
 
-  // Tick automatique local toutes les 30s
+  // Tick automatique local toutes les 10s
   bourseTickTimer = setInterval(() => {
     if (!bourseMarketData) return;
     const age = Date.now() - (bourseMarketData.lastUpdate || 0);
@@ -1612,7 +1615,7 @@ async function initBourse() {
       tickBoursePricesLocal();
       renderBourse();
     }
-  }, 5000);
+  }, 1000); // vérifie chaque seconde, déclenche si 10s écoulées
 
   // Compte à rebours affiché
   bourseCountdownTimer = setInterval(() => {
@@ -1641,7 +1644,6 @@ async function saveBourseInvestments() {
     console.warn("Erreur sauvegarde investissements:", e);
   }
 }
-
 // ── Rendu global ──────────────────────────────────────────────
 function renderBourse() {
   renderBourseList();
