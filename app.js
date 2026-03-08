@@ -1595,13 +1595,17 @@ async function initBourse() {
   showPage("bourse");
   // Pas de reset de bourseSelectedId ni du marché : on conserve l'état entre les pages
 
-  // Recharger les investissements depuis Firestore
+  // Recharger les investissements depuis Firestore (survit à la fermeture de l'onglet)
   await loadBourseInvestments();
 
   // Créer le marché seulement si c'est la toute première fois
   if (!bourseMarketData) {
     createBourseMarketLocal();
   }
+
+  // Ajuster les prix du marché pour coller aux prix d'achat des investissements actifs
+  // (évite l'affichage de gains/pertes faux après un rechargement)
+  reconcileBourseMarketWithInvestments();
 
   renderBourse();
 
@@ -1641,6 +1645,30 @@ async function saveBourseInvestments() {
   } catch(e) {
     console.warn("Erreur sauvegarde investissements:", e);
   }
+}
+
+// ── Reconstruire le marché en tenant compte des prix d'achat ──
+// Quand on recharge la page, les prix repartent de basePrice.
+// On force chaque actif dans lequel l'utilisateur a investi
+// à avoir un prix de départ = son purchasePrice, pour que
+// le portefeuille affiche 0% de gain/perte au lieu de chiffres faux.
+function reconcileBourseMarketWithInvestments() {
+  if (!bourseMarketData || !bourseInvestments.length) return;
+  bourseInvestments.forEach(inv => {
+    if (bourseMarketData.assets[inv.assetId]) {
+      // On ne touche pas à l'historique, juste au prix courant
+      // si l'écart est trop grand (signe que le marché a été recréé)
+      const asset = BOURSE_ASSETS.find(a => a.id === inv.assetId);
+      if (!asset) return;
+      const cur = bourseMarketData.assets[inv.assetId].price;
+      // Si le prix courant = basePrice (marché tout frais), on part du purchasePrice
+      if (Math.abs(cur - asset.basePrice) / asset.basePrice < 0.3) {
+        bourseMarketData.assets[inv.assetId].price = inv.purchasePrice;
+        const hist = bourseMarketData.assets[inv.assetId].history;
+        if (hist && hist.length > 0) hist[hist.length - 1] = inv.purchasePrice;
+      }
+    }
+  });
 }
 
 // ── Rendu global ──────────────────────────────────────────────
