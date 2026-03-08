@@ -1526,7 +1526,7 @@ window.pokerQuit = function() {
 };
 
 // ══════════════════════════════════════════════════════════════
-//  BOURSE D'INVESTISSEMENT CRYPTO
+//  BOURSE — MARCHÉ LOCAL (prix gérés en mémoire, pas Firestore)
 // ══════════════════════════════════════════════════════════════
 const BOURSE_ASSETS = [
   { id: "vlxcoin",     name: "VLX Coin",     emoji: "🪙", basePrice: 1000, volatility: 0.13, color: "#d4a017" },
@@ -1537,24 +1537,56 @@ const BOURSE_ASSETS = [
   { id: "diamondx",    name: "DiamondX",     emoji: "💎", basePrice: 2000, volatility: 0.16, color: "#e74c3c" },
 ];
 
-const BOURSE_HISTORY_LEN = 40;   // points d'historique conservés
-const BOURSE_UPDATE_MS   = 30000; // intervalle tick prix (30 s)
+const BOURSE_HISTORY_LEN = 40;
+const BOURSE_UPDATE_MS   = 30000; // tick toutes les 30s
 
-let bourseUnsub          = null;
-let bourseMarketData     = null;
+let bourseMarketData     = null;   // { assets: { id: { price, history[] } }, lastUpdate }
 let bourseInvestments    = [];
 let bourseSelectedId     = BOURSE_ASSETS[0].id;
 let bourseTickTimer      = null;
 let bourseCountdownTimer = null;
-let bourseUpdating       = false;
 
 // ── Arrêt propre ─────────────────────────────────────────────
 window.stopBourse = function() {
-  if (bourseUnsub) { bourseUnsub(); bourseUnsub = null; }
   clearInterval(bourseTickTimer);
   clearInterval(bourseCountdownTimer);
   bourseTickTimer = bourseCountdownTimer = null;
 };
+
+// ── Création marché initial en mémoire ───────────────────────
+function createBourseMarketLocal() {
+  const assets = {};
+  BOURSE_ASSETS.forEach(a => {
+    let p = a.basePrice;
+    const history = [];
+    for (let i = 0; i < BOURSE_HISTORY_LEN; i++) {
+      const trend = Math.random() > 0.5 ? 1 : -1;
+      p = Math.max(a.basePrice * 0.1, p * (1 + trend * Math.random() * a.volatility * 0.6));
+      history.push(Math.round(p * 100) / 100);
+    }
+    assets[a.id] = { price: history[history.length - 1], history };
+  });
+  bourseMarketData = { assets, lastUpdate: Date.now() };
+}
+
+// ── Tick prix (mise à jour locale) ───────────────────────────
+function tickBoursePricesLocal() {
+  if (!bourseMarketData) return;
+  const assets = {};
+  BOURSE_ASSETS.forEach(a => {
+    const cur = bourseMarketData.assets?.[a.id] || { price: a.basePrice, history: [] };
+    const bias   = (Math.random() - 0.48) * 0.015;
+    const noise  = (Math.random() * 2 - 1) * a.volatility;
+    const change = 1 + bias + noise;
+    const newPrice = Math.max(
+      a.basePrice * 0.04,
+      Math.round(cur.price * change * 100) / 100
+    );
+    const history = [...(cur.history || []), newPrice].slice(-BOURSE_HISTORY_LEN);
+    assets[a.id] = { price: newPrice, history };
+  });
+  bourseMarketData = { assets, lastUpdate: Date.now() };
+}
 
 // ── Entrée dans la page ───────────────────────────────────────
 async function initBourse() {
@@ -1562,27 +1594,23 @@ async function initBourse() {
   showPage("bourse");
   bourseSelectedId = BOURSE_ASSETS[0].id;
 
-  // Charger les investissements de l'utilisateur
+  // Charger les investissements depuis Firestore
   await loadBourseInvestments();
 
-  // Écoute temps réel du marché (identique pour tous les joueurs)
-  bourseUnsub = onSnapshot(doc(db, "bourse", "market"), async snap => {
-    if (!snap.exists()) {
-      await createBourseMarket();
-      return;
-    }
-    bourseMarketData = snap.data();
-    renderBourse();
-  });
+  // Si le marché n'existe pas encore (première visite), le créer localement
+  if (!bourseMarketData) {
+    createBourseMarketLocal();
+  }
 
-  // Tick local : déclenche la mise à jour si besoin
-  bourseTickTimer = setInterval(async () => {
-    if (!bourseMarketData || bourseUpdating || !currentUser) return;
+  renderBourse();
+
+  // Tick automatique local toutes les 30s
+  bourseTickTimer = setInterval(() => {
+    if (!bourseMarketData) return;
     const age = Date.now() - (bourseMarketData.lastUpdate || 0);
     if (age >= BOURSE_UPDATE_MS) {
-      bourseUpdating = true;
-      try { await tickBoursePrices(); }
-      finally { bourseUpdating = false; }
+      tickBoursePricesLocal();
+      renderBourse();
     }
   }, 5000);
 
@@ -1596,44 +1624,7 @@ async function initBourse() {
   }, 1000);
 }
 
-// ── Création marché initial ───────────────────────────────────
-async function createBourseMarket() {
-  const assets = {};
-  BOURSE_ASSETS.forEach(a => {
-    let p = a.basePrice;
-    const history = [];
-    for (let i = 0; i < BOURSE_HISTORY_LEN; i++) {
-      // Simulation d'une courbe de départ réaliste
-      const trend = Math.random() > 0.5 ? 1 : -1;
-      p = Math.max(a.basePrice * 0.1, p * (1 + trend * Math.random() * a.volatility * 0.6));
-      history.push(Math.round(p * 100) / 100);
-    }
-    assets[a.id] = { price: history[history.length - 1], history };
-  });
-  await setDoc(doc(db, "bourse", "market"), { assets, lastUpdate: Date.now() });
-}
-
-// ── Génère de nouveaux prix (tick) ───────────────────────────
-async function tickBoursePrices() {
-  if (!bourseMarketData) return;
-  const assets = {};
-  BOURSE_ASSETS.forEach(a => {
-    const cur = bourseMarketData.assets?.[a.id] || { price: a.basePrice, history: [] };
-    // Léger biais aléatoire + volatilité spécifique à l'actif
-    const bias   = (Math.random() - 0.48) * 0.015;
-    const noise  = (Math.random() * 2 - 1) * a.volatility;
-    const change = 1 + bias + noise;
-    const newPrice = Math.max(
-      a.basePrice * 0.04,
-      Math.round(cur.price * change * 100) / 100
-    );
-    const history = [...(cur.history || []), newPrice].slice(-BOURSE_HISTORY_LEN);
-    assets[a.id] = { price: newPrice, history };
-  });
-  await updateDoc(doc(db, "bourse", "market"), { assets, lastUpdate: Date.now() });
-}
-
-// ── Charger / sauvegarder les investissements ─────────────────
+// ── Charger / sauvegarder les investissements (Firestore) ─────
 async function loadBourseInvestments() {
   if (!currentUser) return;
   try {
@@ -1644,7 +1635,11 @@ async function loadBourseInvestments() {
 
 async function saveBourseInvestments() {
   if (!currentUser) return;
-  await setDoc(doc(db, "investments", currentUser.uid), { list: bourseInvestments });
+  try {
+    await setDoc(doc(db, "investments", currentUser.uid), { list: bourseInvestments });
+  } catch(e) {
+    console.warn("Erreur sauvegarde investissements:", e);
+  }
 }
 
 // ── Rendu global ──────────────────────────────────────────────
