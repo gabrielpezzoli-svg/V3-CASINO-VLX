@@ -55,6 +55,7 @@ window.goToGame = function(game) {
   if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
   if (game === "joueurs") initJoueurs();
+  if (game === "bourse") { initBourse(); return; }
   if (game === "poker") { showPage("poker"); return; }
 
   if (game === "roulette") {
@@ -70,6 +71,7 @@ window.goToGame = function(game) {
 };
 
 window.goToLobby = function() {
+  stopBourse();
   showPage("lobby");
   initBonus();
 };
@@ -77,7 +79,7 @@ window.goToLobby = function() {
 function updateAllBalances() {
   if (!userData) return;
   const bal = (userData.balance || 0).toLocaleString("fr-FR") + " VLX";
-  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","poker"].forEach(id => {
+  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","poker","bourse"].forEach(id => {
     const el = document.getElementById(id + "-balance");
     if (el) el.textContent = bal;
   });
@@ -1122,7 +1124,6 @@ window.adminRemoveVLX = async function() {
   const amount = parseInt(document.getElementById("admin-give-amount").value);
   if (isNaN(amount) || amount < 1) { toast("Montant invalide", "lose"); return; }
   try {
-    // Lire le vrai solde depuis Firestore pour éviter les données périmées
     const snap = await getDoc(doc(db, "users", adminTargetUid));
     if (!snap.exists()) { toast("Joueur introuvable", "lose"); return; }
     const currentBal = snap.data().balance || 0;
@@ -1523,6 +1524,399 @@ window.pokerQuit = function() {
   document.getElementById("poker-lobby").style.display = "flex";
   document.getElementById("poker-table").style.display = "none";
 };
+
+// ══════════════════════════════════════════════════════════════
+//  BOURSE D'INVESTISSEMENT CRYPTO
+// ══════════════════════════════════════════════════════════════
+const BOURSE_ASSETS = [
+  { id: "vlxcoin",     name: "VLX Coin",     emoji: "🪙", basePrice: 1000, volatility: 0.13, color: "#d4a017" },
+  { id: "bitgold",     name: "BitGold",      emoji: "🥇", basePrice: 5000, volatility: 0.07, color: "#f0c040" },
+  { id: "moontoken",   name: "MoonToken",    emoji: "🌙", basePrice: 150,  volatility: 0.24, color: "#a78bfa" },
+  { id: "casinoshare", name: "CasinoShare",  emoji: "🎰", basePrice: 800,  volatility: 0.05, color: "#3498db" },
+  { id: "wavecoin",    name: "WaveCoin",     emoji: "🌊", basePrice: 300,  volatility: 0.19, color: "#2ecc71" },
+  { id: "diamondx",    name: "DiamondX",     emoji: "💎", basePrice: 2000, volatility: 0.16, color: "#e74c3c" },
+];
+
+const BOURSE_HISTORY_LEN = 40;   // points d'historique conservés
+const BOURSE_UPDATE_MS   = 30000; // intervalle tick prix (30 s)
+
+let bourseUnsub          = null;
+let bourseMarketData     = null;
+let bourseInvestments    = [];
+let bourseSelectedId     = BOURSE_ASSETS[0].id;
+let bourseTickTimer      = null;
+let bourseCountdownTimer = null;
+let bourseUpdating       = false;
+
+// ── Arrêt propre ─────────────────────────────────────────────
+window.stopBourse = function() {
+  if (bourseUnsub) { bourseUnsub(); bourseUnsub = null; }
+  clearInterval(bourseTickTimer);
+  clearInterval(bourseCountdownTimer);
+  bourseTickTimer = bourseCountdownTimer = null;
+};
+
+// ── Entrée dans la page ───────────────────────────────────────
+async function initBourse() {
+  stopBourse();
+  showPage("bourse");
+  bourseSelectedId = BOURSE_ASSETS[0].id;
+
+  // Charger les investissements de l'utilisateur
+  await loadBourseInvestments();
+
+  // Écoute temps réel du marché (identique pour tous les joueurs)
+  bourseUnsub = onSnapshot(doc(db, "bourse", "market"), async snap => {
+    if (!snap.exists()) {
+      await createBourseMarket();
+      return;
+    }
+    bourseMarketData = snap.data();
+    renderBourse();
+  });
+
+  // Tick local : déclenche la mise à jour si besoin
+  bourseTickTimer = setInterval(async () => {
+    if (!bourseMarketData || bourseUpdating || !currentUser) return;
+    const age = Date.now() - (bourseMarketData.lastUpdate || 0);
+    if (age >= BOURSE_UPDATE_MS) {
+      bourseUpdating = true;
+      try { await tickBoursePrices(); }
+      finally { bourseUpdating = false; }
+    }
+  }, 5000);
+
+  // Compte à rebours affiché
+  bourseCountdownTimer = setInterval(() => {
+    const el = document.getElementById("bourse-next-tick");
+    if (!el || !bourseMarketData) return;
+    const remaining = Math.max(0, BOURSE_UPDATE_MS - (Date.now() - (bourseMarketData.lastUpdate || 0)));
+    const s = Math.ceil(remaining / 1000);
+    el.textContent = `⏱ Prochain tick dans ${s}s`;
+  }, 1000);
+}
+
+// ── Création marché initial ───────────────────────────────────
+async function createBourseMarket() {
+  const assets = {};
+  BOURSE_ASSETS.forEach(a => {
+    let p = a.basePrice;
+    const history = [];
+    for (let i = 0; i < BOURSE_HISTORY_LEN; i++) {
+      // Simulation d'une courbe de départ réaliste
+      const trend = Math.random() > 0.5 ? 1 : -1;
+      p = Math.max(a.basePrice * 0.1, p * (1 + trend * Math.random() * a.volatility * 0.6));
+      history.push(Math.round(p * 100) / 100);
+    }
+    assets[a.id] = { price: history[history.length - 1], history };
+  });
+  await setDoc(doc(db, "bourse", "market"), { assets, lastUpdate: Date.now() });
+}
+
+// ── Génère de nouveaux prix (tick) ───────────────────────────
+async function tickBoursePrices() {
+  if (!bourseMarketData) return;
+  const assets = {};
+  BOURSE_ASSETS.forEach(a => {
+    const cur = bourseMarketData.assets?.[a.id] || { price: a.basePrice, history: [] };
+    // Léger biais aléatoire + volatilité spécifique à l'actif
+    const bias   = (Math.random() - 0.48) * 0.015;
+    const noise  = (Math.random() * 2 - 1) * a.volatility;
+    const change = 1 + bias + noise;
+    const newPrice = Math.max(
+      a.basePrice * 0.04,
+      Math.round(cur.price * change * 100) / 100
+    );
+    const history = [...(cur.history || []), newPrice].slice(-BOURSE_HISTORY_LEN);
+    assets[a.id] = { price: newPrice, history };
+  });
+  await updateDoc(doc(db, "bourse", "market"), { assets, lastUpdate: Date.now() });
+}
+
+// ── Charger / sauvegarder les investissements ─────────────────
+async function loadBourseInvestments() {
+  if (!currentUser) return;
+  try {
+    const snap = await getDoc(doc(db, "investments", currentUser.uid));
+    bourseInvestments = snap.exists() ? (snap.data().list || []) : [];
+  } catch { bourseInvestments = []; }
+}
+
+async function saveBourseInvestments() {
+  if (!currentUser) return;
+  await setDoc(doc(db, "investments", currentUser.uid), { list: bourseInvestments });
+}
+
+// ── Rendu global ──────────────────────────────────────────────
+function renderBourse() {
+  renderBourseList();
+  renderBourseDetail();
+  renderBoursePortfolio();
+}
+
+// ── Colonne gauche : liste des 6 actifs ───────────────────────
+function renderBourseList() {
+  const container = document.getElementById("bourse-assets-list");
+  if (!container || !bourseMarketData) return;
+  container.innerHTML = "";
+
+  BOURSE_ASSETS.forEach(asset => {
+    const data = bourseMarketData.assets?.[asset.id];
+    if (!data) return;
+
+    const history = data.history || [data.price];
+    const prev    = history.length >= 2 ? history[history.length - 2] : data.price;
+    const pct     = ((data.price - prev) / Math.max(prev, 0.01) * 100).toFixed(2);
+    const isUp    = data.price >= prev;
+
+    const el = document.createElement("div");
+    el.className = "bourse-asset-card" + (bourseSelectedId === asset.id ? " selected" : "");
+    el.style.setProperty("--asset-color", asset.color);
+    el.innerHTML = `
+      <div class="bac-header">
+        <span class="bac-emoji">${asset.emoji}</span>
+        <div class="bac-names">
+          <div class="bac-name">${asset.name}</div>
+          <div class="bac-id">${asset.id.toUpperCase()}</div>
+        </div>
+        <div class="bac-right">
+          <div class="bac-price">${data.price.toLocaleString("fr-FR")} VLX</div>
+          <div class="bac-change ${isUp ? "up" : "down"}">${isUp ? "▲" : "▼"} ${Math.abs(pct)}%</div>
+        </div>
+      </div>
+      <div class="bac-chart">${bourseDrawMini(history, isUp)}</div>`;
+    el.onclick = () => { bourseSelectedId = asset.id; renderBourse(); };
+    container.appendChild(el);
+  });
+}
+
+// ── Colonne droite : détail + achat ──────────────────────────
+function renderBourseDetail() {
+  const panel = document.getElementById("bourse-detail-panel");
+  if (!panel || !bourseMarketData) return;
+
+  const asset = BOURSE_ASSETS.find(a => a.id === bourseSelectedId);
+  if (!asset) return;
+  const data = bourseMarketData.assets?.[asset.id];
+  if (!data) return;
+
+  const history = data.history || [data.price];
+  const first   = history[0] || data.price;
+  const pctAll  = ((data.price - first) / Math.max(first, 0.01) * 100).toFixed(2);
+  const prev    = history.length >= 2 ? history[history.length - 2] : data.price;
+  const pctLast = ((data.price - prev) / Math.max(prev, 0.01) * 100).toFixed(2);
+  const isUp    = data.price >= prev;
+  const vol     = Math.round(asset.volatility * 100);
+
+  panel.innerHTML = `
+    <div class="bourse-detail-header">
+      <span class="bourse-detail-emoji">${asset.emoji}</span>
+      <div class="bourse-detail-info">
+        <div class="bourse-detail-name">${asset.name} <span style="font-family:var(--ff-mono);font-size:.75rem;color:var(--text2)">${asset.id.toUpperCase()}</span></div>
+        <div class="bourse-detail-price">${data.price.toLocaleString("fr-FR")} VLX</div>
+        <div class="bourse-detail-change ${isUp ? "up" : "down"}">
+          ${isUp ? "▲" : "▼"} ${Math.abs(pctLast)}% ce tick &nbsp;·&nbsp; ${Number(pctAll) >= 0 ? "+" : ""}${pctAll}% depuis l'ouverture
+        </div>
+        <div class="bourse-detail-meta">Volatilité ${vol}% · ${BOURSE_HISTORY_LEN} ticks d'historique</div>
+      </div>
+    </div>
+    <div class="bourse-big-chart">${bourseDrawBig(history, isUp, asset.color)}</div>
+    <div id="bourse-next-tick" class="bourse-tick-info">⏱ Calcul...</div>
+    <div class="bourse-buy-panel">
+      <label class="bet-label">Montant à investir (VLX)</label>
+      <div class="bet-row">
+        <input type="number" id="bourse-invest-amount" class="bet-input" value="100" min="10"/>
+        <div class="quick-bets">
+          <button onclick="quickBet('bourse-invest-amount',0.5)">½</button>
+          <button onclick="quickBet('bourse-invest-amount',2)">×2</button>
+          <button onclick="setMax('bourse-invest-amount')">MAX</button>
+        </div>
+      </div>
+      <button class="btn-play" onclick="bourseInvest()">📈 INVESTIR MAINTENANT</button>
+    </div>`;
+}
+
+// ── Portefeuille personnel ────────────────────────────────────
+function renderBoursePortfolio() {
+  const container = document.getElementById("bourse-portfolio");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (!bourseInvestments.length) {
+    container.innerHTML = '<div class="bourse-empty">Aucun investissement actif.<br>Sélectionne un actif et investis !</div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="bourse-portfolio-title">📊 Mon Portefeuille</div>';
+
+  bourseInvestments.forEach(inv => {
+    const asset = BOURSE_ASSETS.find(a => a.id === inv.assetId);
+    const data  = bourseMarketData?.assets?.[inv.assetId];
+    if (!asset || !data) return;
+
+    const currentValue = Math.round(inv.amount * (data.price / inv.purchasePrice));
+    const profit       = currentValue - inv.amount;
+    const pct          = ((data.price - inv.purchasePrice) / Math.max(inv.purchasePrice, 0.01) * 100).toFixed(2);
+    const isUp         = profit >= 0;
+
+    const el = document.createElement("div");
+    el.className = "bourse-inv-row";
+    el.style.borderLeftColor = asset.color;
+    el.style.borderLeftWidth = "3px";
+    el.innerHTML = `
+      <div class="bir-left">
+        <span class="bir-emoji">${asset.emoji}</span>
+        <div>
+          <div class="bir-name">${asset.name}</div>
+          <div class="bir-detail">
+            Investi : ${inv.amount.toLocaleString("fr-FR")} VLX<br>
+            Achat : ${inv.purchasePrice.toFixed(2)} VLX · Actuel : ${data.price.toFixed(2)} VLX
+          </div>
+        </div>
+      </div>
+      <div class="bir-right">
+        <div class="bir-value">${currentValue.toLocaleString("fr-FR")} VLX</div>
+        <div class="bir-profit ${isUp ? "up" : "down"}">
+          ${isUp ? "+" : ""}${profit.toLocaleString("fr-FR")} VLX (${isUp ? "+" : ""}${pct}%)
+        </div>
+        <button class="btn-bourse-sell" onclick="bourseSell('${inv.id}')">
+          💰 VENDRE ${isUp ? "✅" : "📉"}
+        </button>
+      </div>`;
+    container.appendChild(el);
+  });
+}
+
+// ── Investir ─────────────────────────────────────────────────
+window.bourseInvest = async function() {
+  if (!bourseSelectedId || !bourseMarketData) return;
+  const amount = parseBet("bourse-invest-amount");
+  if (amount === null) return;
+
+  const data = bourseMarketData.assets?.[bourseSelectedId];
+  if (!data) { toast("Données du marché indisponibles", "lose"); return; }
+
+  const investment = {
+    id: `inv_${currentUser.uid}_${Date.now()}`,
+    assetId: bourseSelectedId,
+    amount,
+    purchasePrice: data.price,
+    timestamp: Date.now()
+  };
+
+  // Déduire immédiatement
+  userData.balance -= amount;
+  bourseInvestments.push(investment);
+
+  try {
+    await Promise.all([saveUserData(), saveBourseInvestments()]);
+    const asset = BOURSE_ASSETS.find(a => a.id === bourseSelectedId);
+    toast(`📈 ${amount} VLX investis dans ${asset.name} !`, "win");
+    renderBoursePortfolio();
+    // Mettre à jour l'affichage du solde dans le header
+    const bi = document.getElementById("bourse-invest-amount");
+    if (bi) bi.max = userData.balance;
+  } catch(e) {
+    // Rollback
+    userData.balance += amount;
+    bourseInvestments.pop();
+    updateAllBalances();
+    toast("Erreur lors de l'investissement", "lose");
+  }
+};
+
+// ── Vendre ───────────────────────────────────────────────────
+window.bourseSell = async function(invId) {
+  const idx = bourseInvestments.findIndex(i => i.id === invId);
+  if (idx === -1) return;
+
+  const inv  = bourseInvestments[idx];
+  const data = bourseMarketData?.assets?.[inv.assetId];
+  if (!data) { toast("Données indisponibles, réessayez dans un instant", "lose"); return; }
+
+  const currentValue = Math.round(inv.amount * (data.price / inv.purchasePrice));
+  const profit       = currentValue - inv.amount;
+
+  // Retirer de la liste et créditer
+  bourseInvestments.splice(idx, 1);
+  userData.balance += currentValue;
+  userData.gamesPlayed++;
+
+  try {
+    await Promise.all([saveUserData(), saveBourseInvestments()]);
+    const asset = BOURSE_ASSETS.find(a => a.id === inv.assetId);
+    if (profit >= 0) {
+      toast(`💰 ${asset.name} vendu : +${profit.toLocaleString("fr-FR")} VLX 🎉`, "win");
+    } else {
+      toast(`📉 ${asset.name} vendu : ${profit.toLocaleString("fr-FR")} VLX`, "lose");
+    }
+    renderBoursePortfolio();
+  } catch(e) {
+    // Rollback
+    bourseInvestments.splice(idx, 0, inv);
+    userData.balance -= currentValue;
+    userData.gamesPlayed--;
+    updateAllBalances();
+    toast("Erreur lors de la vente", "lose");
+  }
+};
+
+// ── Graphique miniature ───────────────────────────────────────
+function bourseDrawMini(history, isUp) {
+  if (!history || history.length < 2) return "";
+  const W = 220, H = 40;
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min || 1;
+  const pts = history.map((v, i) => {
+    const x = (i / (history.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 6) - 3;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const col = isUp ? "#27ae60" : "#e74c3c";
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:40px;display:block;">
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+// ── Grand graphique avec remplissage ─────────────────────────
+function bourseDrawBig(history, isUp, color) {
+  if (!history || history.length < 2) return "";
+  const W = 500, H = 120;
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min || 1;
+
+  const pts = history.map((v, i) => {
+    const x = (i / (history.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 12) - 6;
+    return [x.toFixed(1), y.toFixed(1)];
+  });
+
+  const ptsStr  = pts.map(p => p.join(",")).join(" ");
+  const firstPt = pts[0];
+  const lastPt  = pts[pts.length - 1];
+  const fillPath = `M ${firstPt[0]},${H} L ${firstPt[0]},${firstPt[1]} ${ptsStr} L ${lastPt[0]},${H} Z`;
+
+  const lineCol = isUp ? "#27ae60" : "#e74c3c";
+  const fillCol = isUp ? "rgba(39,174,96,.15)" : "rgba(231,76,60,.15)";
+
+  // Ligne de prix actuel
+  const lastY = lastPt[1];
+
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;display:block;">
+    <defs>
+      <linearGradient id="bgrd_${bourseSelectedId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${lineCol}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${lineCol}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${fillPath}" fill="url(#bgrd_${bourseSelectedId})"/>
+    <polyline points="${ptsStr}" fill="none" stroke="${lineCol}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <line x1="0" y1="${lastY}" x2="${W}" y2="${lastY}" stroke="${lineCol}" stroke-width="0.5" stroke-dasharray="4,4" opacity="0.4"/>
+    <circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="3.5" fill="${lineCol}" opacity="0.9"/>
+  </svg>`;
+}
 
 // ══════════════════════════════════════════════════════════════
 //  UTILS
