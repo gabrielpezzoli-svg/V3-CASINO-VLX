@@ -1526,7 +1526,7 @@ window.pokerQuit = function() {
 };
 
 // ══════════════════════════════════════════════════════════════
-//  BOURSE — MARCHÉ LOCAL (prix gérés en mémoire, pas Firestore)
+//  BOURSE D'INVESTISSEMENT CRYPTO — MARCHÉ LOCAL (100% en mémoire)
 // ══════════════════════════════════════════════════════════════
 const BOURSE_ASSETS = [
   { id: "vlxcoin",     name: "VLX Coin",     emoji: "🪙", basePrice: 1000, volatility: 0.13, color: "#d4a017" },
@@ -1540,15 +1540,14 @@ const BOURSE_ASSETS = [
 const BOURSE_HISTORY_LEN = 40;
 const BOURSE_UPDATE_MS   = 10000; // tick toutes les 10s
 
-// bourseMarketData est volontairement en dehors de initBourse
-// pour survivre aux changements de page (lobby → bourse → lobby → bourse)
-let bourseMarketData     = null;   // { assets: { id: { price, history[] } }, lastUpdate }
+// bourseMarketData survit aux changements de page (lobby → bourse → lobby → bourse)
+let bourseMarketData     = null;
 let bourseInvestments    = [];
 let bourseSelectedId     = BOURSE_ASSETS[0].id;
 let bourseTickTimer      = null;
 let bourseCountdownTimer = null;
 
-// ── Arrêt propre ─────────────────────────────────────────────
+// ── Arrêt propre (timers seulement, le marché reste en mémoire) ──
 window.stopBourse = function() {
   clearInterval(bourseTickTimer);
   clearInterval(bourseCountdownTimer);
@@ -1571,7 +1570,7 @@ function createBourseMarketLocal() {
   bourseMarketData = { assets, lastUpdate: Date.now() };
 }
 
-// ── Tick prix (mise à jour locale) ───────────────────────────
+// ── Tick prix local ───────────────────────────────────────────
 function tickBoursePricesLocal() {
   if (!bourseMarketData) return;
   const assets = {};
@@ -1594,10 +1593,9 @@ function tickBoursePricesLocal() {
 async function initBourse() {
   stopBourse();
   showPage("bourse");
-  // On ne remet PAS bourseSelectedId à 0 pour garder la sélection
-  // On ne recrée PAS le marché s'il existe déjà (prix conservés entre les pages)
+  // Pas de reset de bourseSelectedId ni du marché : on conserve l'état entre les pages
 
-  // Recharger les investissements (au cas où une vente/achat a eu lieu ailleurs)
+  // Recharger les investissements depuis Firestore
   await loadBourseInvestments();
 
   // Créer le marché seulement si c'est la toute première fois
@@ -1607,7 +1605,7 @@ async function initBourse() {
 
   renderBourse();
 
-  // Tick automatique local toutes les 10s
+  // Tick automatique : vérifie chaque seconde, déclenche si 10s écoulées
   bourseTickTimer = setInterval(() => {
     if (!bourseMarketData) return;
     const age = Date.now() - (bourseMarketData.lastUpdate || 0);
@@ -1615,7 +1613,7 @@ async function initBourse() {
       tickBoursePricesLocal();
       renderBourse();
     }
-  }, 1000); // vérifie chaque seconde, déclenche si 10s écoulées
+  }, 1000);
 
   // Compte à rebours affiché
   bourseCountdownTimer = setInterval(() => {
@@ -1644,6 +1642,7 @@ async function saveBourseInvestments() {
     console.warn("Erreur sauvegarde investissements:", e);
   }
 }
+
 // ── Rendu global ──────────────────────────────────────────────
 function renderBourse() {
   renderBourseList();
