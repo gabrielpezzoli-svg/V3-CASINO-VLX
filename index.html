@@ -634,6 +634,7 @@
         <div style="background:rgba(212,160,23,.08);border:1px solid rgba(212,160,23,.25);border-radius:6px;padding:.8rem 1rem;margin-bottom:.5rem">
           <div id="admin-target-name" style="font-weight:700;color:var(--text)"></div>
           <div id="admin-target-balance" style="font-family:var(--ff-mono);color:var(--gold2);font-size:.9rem"></div>
+          <div id="admin-target-banned" style="display:none;margin-top:.4rem;color:#e74c3c;font-size:.8rem;font-weight:700;background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);border-radius:4px;padding:.25rem .6rem;">🔨 CE JOUEUR EST BANNI</div>
         </div>
         <label class="bet-label">Montant (VLX)</label>
         <div class="bet-row">
@@ -646,6 +647,16 @@
         <div class="admin-modal-btns" style="margin-top:.4rem">
           <button class="btn-admin-set" onclick="adminSetVLX()">📝 DÉFINIR LE SOLDE</button>
           <button class="btn-admin-close" onclick="closeAdminModal()">Fermer</button>
+        </div>
+        <!-- SECTION BAN — séparée visuellement -->
+        <div class="admin-ban-section">
+          <div class="admin-ban-divider">
+            <span>⚠️ ZONE DANGEREUSE</span>
+          </div>
+          <div class="admin-modal-btns" style="margin-top:.5rem">
+            <button class="btn-admin-ban" onclick="adminBanPlayer()">🔨 BANNIR DÉFINITIVEMENT</button>
+            <button class="btn-admin-unban" onclick="adminUnbanPlayer()">✅ DÉBANNIR</button>
+          </div>
         </div>
       </div>
     </div>
