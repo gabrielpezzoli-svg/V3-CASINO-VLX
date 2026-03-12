@@ -1359,10 +1359,6 @@ window.adminBanPlayer = async function() {
     leaderboardData = leaderboardData.filter(u => u.uid !== adminTargetUid);
     if (currentPage === "leaderboard") renderLeaderboard();
 
-    // Redémarrer le listener leaderboard pour forcer sync Firestore
-    if (unsubLB) { unsubLB(); unsubLB = null; }
-    startLeaderboard();
-
     // Fermer le modal après 1.5s
     setTimeout(() => {
       document.getElementById("admin-modal").style.display = "none";
