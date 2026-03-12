@@ -62,12 +62,6 @@
         <div class="gc-desc">Rouge ×2 · Noir ×2 · Vert ×20</div>
         <div class="gc-play">JOUER →</div>
       </div>
-      <div class="game-card" onclick="goToGame('dice')">
-        <div class="gc-icon">🎲</div>
-        <div class="gc-name">Dice</div>
-        <div class="gc-desc">Choisis un seuil · Plus c'est risqué, plus tu gagnes</div>
-        <div class="gc-play">JOUER →</div>
-      </div>
       <div class="game-card" onclick="goToGame('mines')">
         <div class="gc-icon">💣</div>
         <div class="gc-name">Mines</div>
@@ -159,63 +153,6 @@
         </div>
       </div>
       <button id="roulette-spin-btn" class="btn-play" onclick="spinRoulette()" disabled>CHOISIR UNE COULEUR D'ABORD</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE DICE -->
-<div id="page-dice" class="page game-page">
-  <div class="game-topbar">
-    <button class="back-btn" onclick="goToLobby()">← Retour</button>
-    <div class="game-topbar-title">🎲 Dice</div>
-    <div id="dice-balance" class="topbar-balance">0 VLX</div>
-  </div>
-  <div class="game-content">
-    <div class="dice-bar-wrap">
-      <div class="dice-bar-track">
-        <div id="dice-bar-win" class="dice-bar-win"></div>
-        <div id="dice-bar-marker" class="dice-bar-marker" style="display:none"></div>
-      </div>
-      <div class="dice-bar-labels"><span>1</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
-    </div>
-    <div class="dice-result-row">
-      <div id="dice-rolled" class="dice-rolled">—</div>
-      <div class="dice-vs">résultat</div>
-    </div>
-    <div class="dice-controls">
-      <div class="dice-ctrl-group">
-        <label class="bet-label">Seuil cible</label>
-        <div class="dice-number-row">
-          <button class="dice-adj-btn" onclick="adjustTarget(-5)">−5</button>
-          <button class="dice-adj-btn" onclick="adjustTarget(-1)">−1</button>
-          <div id="dice-target-display" class="dice-target-display">50</div>
-          <button class="dice-adj-btn" onclick="adjustTarget(1)">+1</button>
-          <button class="dice-adj-btn" onclick="adjustTarget(5)">+5</button>
-        </div>
-      </div>
-      <div class="dice-ctrl-group">
-        <label class="bet-label">Direction</label>
-        <div class="dice-dir-btns">
-          <button id="dir-under" class="dir-btn active" onclick="setDirection('under')">⬇ SOUS</button>
-          <button id="dir-over" class="dir-btn" onclick="setDirection('over')">⬆ SUR</button>
-        </div>
-      </div>
-      <div class="dice-ctrl-group">
-        <label class="bet-label">Multiplicateur</label>
-        <div id="dice-mult-display" class="dice-mult-display">×2.00</div>
-      </div>
-    </div>
-    <div class="bet-panel">
-      <label class="bet-label">Mise (VLX)</label>
-      <div class="bet-row">
-        <input type="number" id="dice-bet" class="bet-input" value="100" min="10"/>
-        <div class="quick-bets">
-          <button onclick="quickBet('dice-bet',0.5)">½</button>
-          <button onclick="quickBet('dice-bet',2)">×2</button>
-          <button onclick="setMax('dice-bet')">MAX</button>
-        </div>
-      </div>
-      <button id="dice-roll-btn" class="btn-play" onclick="rollDice()">🎲 LANCER</button>
     </div>
   </div>
 </div>
