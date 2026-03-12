@@ -1232,6 +1232,9 @@ window.checkAdminCode = function() {
     document.getElementById("admin-search-input").value = "";
     document.getElementById("admin-search-results").innerHTML = "";
     document.getElementById("admin-selected-player").style.display = "none";
+    // Afficher l'UID admin pour configuration des règles Firestore
+    const uidInfoEl = document.getElementById("admin-uid-info");
+    if (uidInfoEl) { uidInfoEl.textContent = "Ton UID : " + (currentUser?.uid || "?"); uidInfoEl.style.display = "block"; }
     setTimeout(() => document.getElementById("admin-search-input").focus(), 100);
   } else {
     document.getElementById("admin-code-error").textContent = "❌ Code incorrect";
