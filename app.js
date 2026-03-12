@@ -256,6 +256,8 @@ function showDuplicateSessionScreen() {
   `;
   document.body.appendChild(screen);
 }
+
+async function saveUserData() {
   if (!currentUser || !userData) return;
   await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance, gamesPlayed: userData.gamesPlayed });
   updateAllBalances();
