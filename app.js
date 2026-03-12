@@ -30,6 +30,7 @@ let profilTargetData = null;
 // ── SESSION UNIQUE — génère un ID par onglet/appareil ──
 const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
 let sessionKilled = false;
+let bannedScreenShown = false; // empêche showPage("login") après signOut sur un banni
 
 // ══════════════════════════════════════════════════════════════
 //  TOAST
@@ -149,7 +150,10 @@ onAuthStateChanged(auth, async user => {
     currentUser = null; userData = null;
     if (unsubLB) { unsubLB(); unsubLB = null; }
     if (unsubMe) { unsubMe(); unsubMe = null; }
-    showPage("login");
+    // Ne pas afficher login si l'écran ban ou session dupliquée est actif
+    if (!bannedScreenShown && !sessionKilled) {
+      showPage("login");
+    }
   }
 });
 
@@ -166,10 +170,10 @@ async function loadOrCreateUser(user) {
   } else {
     userData = snap.data();
     if (userData.banned) {
-      // Afficher la page de ban définitif
-      showBannedScreen();
       userData = null;
-      await signOut(auth);
+      showBannedScreen(); // affiche l'écran AVANT le signOut
+      await signOut(auth); // signOut déclenche onAuthStateChanged → user=null
+      // mais le flag bannedScreenShown empêche showPage("login")
     }
   }
 }
@@ -178,6 +182,7 @@ async function loadOrCreateUser(user) {
 //  ÉCRAN DE BAN DÉFINITIF
 // ══════════════════════════════════════════════════════════════
 function showBannedScreen() {
+  bannedScreenShown = true;
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.body.style.margin = "0";
   document.body.style.padding = "0";
@@ -269,6 +274,7 @@ function listenMyDoc() {
     if (data.banned) {
       if (unsubMe) { unsubMe(); unsubMe = null; }
       if (unsubLB) { unsubLB(); unsubLB = null; }
+      bannedScreenShown = true;
       showBannedScreen();
       signOut(auth);
       return;
