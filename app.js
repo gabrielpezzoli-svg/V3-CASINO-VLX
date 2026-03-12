@@ -27,6 +27,10 @@ let tombolaData = null;
 let profilTargetUid = null;
 let profilTargetData = null;
 
+// ── SESSION UNIQUE — génère un ID par onglet/appareil ──
+const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+let sessionKilled = false;
+
 // ══════════════════════════════════════════════════════════════
 //  TOAST
 // ══════════════════════════════════════════════════════════════
@@ -107,16 +111,40 @@ onAuthStateChanged(auth, async user => {
     currentUser = user;
     await loadOrCreateUser(user);
     if (!userData) return;
-    await updateDoc(doc(db, "users", user.uid), { online: true, lastSeen: Date.now() });
+
+    // ── Enregistre la session active sur ce compte ──
+    await updateDoc(doc(db, "users", user.uid), {
+      online: true,
+      lastSeen: Date.now(),
+      activeSession: SESSION_ID
+    });
+
     document.getElementById("user-avatar").src = user.photoURL || "";
     document.getElementById("lobby-username").textContent = userData.name || user.displayName || "";
     startLeaderboard();
     listenMyDoc();
     showPage("lobby");
     initBonus();
+
+    // Heartbeat toutes les 20s pour maintenir la session active
     setInterval(() => {
-      if (currentUser) updateDoc(doc(db, "users", currentUser.uid), { online: true, lastSeen: Date.now() });
-    }, 30000);
+      if (currentUser && !sessionKilled) {
+        updateDoc(doc(db, "users", currentUser.uid), {
+          online: true,
+          lastSeen: Date.now(),
+          activeSession: SESSION_ID
+        });
+      }
+    }, 20000);
+
+    // Déconnexion propre si l'onglet/fenêtre est fermé
+    window.addEventListener("beforeunload", () => {
+      if (currentUser && !sessionKilled) {
+        navigator.sendBeacon && navigator.sendBeacon("/favicon.ico"); // just to flush
+        updateDoc(doc(db, "users", currentUser.uid), { online: false, activeSession: null });
+      }
+    });
+
   } else {
     currentUser = null; userData = null;
     if (unsubLB) { unsubLB(); unsubLB = null; }
@@ -183,7 +211,46 @@ function showBannedScreen() {
   document.body.appendChild(screen);
 }
 
-async function saveUserData() {
+// ══════════════════════════════════════════════════════════════
+//  ÉCRAN SESSION DUPLIQUÉE (autre appareil connecté)
+// ══════════════════════════════════════════════════════════════
+function showDuplicateSessionScreen() {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.body.style.background = "#000";
+  document.body.style.overflow = "hidden";
+
+  const existing = document.getElementById("dup-session-screen");
+  if (existing) { existing.style.display = "flex"; return; }
+
+  const screen = document.createElement("div");
+  screen.id = "dup-session-screen";
+  screen.style.cssText = `
+    position:fixed;inset:0;background:#0a0a0f;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    z-index:99999;gap:1.5rem;
+    font-family:'DM Mono',monospace;
+    padding:2rem;
+  `;
+  screen.innerHTML = `
+    <div style="font-size:4rem;">🔒</div>
+    <div style="color:#e67e22;font-size:1.6rem;font-weight:700;letter-spacing:.08em;text-align:center;">SESSION EXPIRÉE</div>
+    <div style="color:#666;font-size:.95rem;text-align:center;max-width:380px;line-height:1.8;">
+      Votre compte a été ouvert sur un autre appareil ou onglet.<br>
+      <span style="color:#e67e22;">Un seul appareil peut être connecté à la fois.</span>
+    </div>
+    <button onclick="location.reload()" style="
+      margin-top:.5rem;padding:.8rem 2.5rem;
+      background:linear-gradient(135deg,#e67e22,#b8500a);
+      border:none;border-radius:6px;
+      color:#fff;font-family:'Rajdhani',sans-serif;
+      font-size:1.1rem;font-weight:700;cursor:pointer;
+      letter-spacing:.08em;
+    ">🔄 SE RECONNECTER</button>
+    <div style="color:#333;font-size:.72rem;letter-spacing:.2em;margin-top:.5rem;">— CASINO VLX —</div>
+  `;
+  document.body.appendChild(screen);
+}
   if (!currentUser || !userData) return;
   await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance, gamesPlayed: userData.gamesPlayed });
   updateAllBalances();
@@ -198,11 +265,21 @@ function listenMyDoc() {
     if (!snap.exists()) return;
     const data = snap.data();
 
-    // Vérification ban en temps réel
+    // ── Vérification ban en temps réel ──
     if (data.banned) {
       if (unsubMe) { unsubMe(); unsubMe = null; }
       if (unsubLB) { unsubLB(); unsubLB = null; }
       showBannedScreen();
+      signOut(auth);
+      return;
+    }
+
+    // ── Détection session dupliquée (autre onglet / autre appareil) ──
+    if (data.activeSession && data.activeSession !== SESSION_ID && !sessionKilled) {
+      sessionKilled = true;
+      if (unsubMe) { unsubMe(); unsubMe = null; }
+      if (unsubLB) { unsubLB(); unsubLB = null; }
+      showDuplicateSessionScreen();
       signOut(auth);
       return;
     }
@@ -248,7 +325,126 @@ function parseBet(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  ROULETTE — 37 CASES
+//  DICE — Probabilités honnêtes, mise déduite avant le lancer
+// ══════════════════════════════════════════════════════════════
+let diceTarget = 50;
+let diceDirection = "under"; // "under" ou "over"
+let diceRolling = false;
+
+// Calcul du multiplicateur selon la probabilité réelle
+// win% = (target-1)/100 pour "under", (100-target)/100 pour "over"
+// mult = (100 / win%) × 0.96  (house edge 4%)
+function calcDiceMultiplier(target, direction) {
+  let winChance;
+  if (direction === "under") {
+    winChance = (target - 1); // P(résultat < target) = (target-1)/100
+  } else {
+    winChance = (100 - target); // P(résultat > target) = (100-target)/100
+  }
+  winChance = Math.max(1, Math.min(98, winChance)); // clamping sécurité
+  const mult = (100 / winChance) * 0.96;
+  return Math.round(mult * 100) / 100;
+}
+
+function updateDiceUI() {
+  const pct = diceDirection === "under" ? (diceTarget - 1) : (100 - diceTarget);
+  const mult = calcDiceMultiplier(diceTarget, diceDirection);
+
+  const barWin = document.getElementById("dice-bar-win");
+  if (barWin) barWin.style.width = pct + "%";
+
+  const targetEl = document.getElementById("dice-target-display");
+  if (targetEl) targetEl.textContent = diceTarget;
+
+  const multEl = document.getElementById("dice-mult-display");
+  if (multEl) multEl.textContent = "×" + mult.toFixed(2);
+
+  const dirUnder = document.getElementById("dir-under");
+  const dirOver = document.getElementById("dir-over");
+  if (dirUnder) dirUnder.classList.toggle("active", diceDirection === "under");
+  if (dirOver) dirOver.classList.toggle("active", diceDirection === "over");
+
+  const marker = document.getElementById("dice-bar-marker");
+  if (marker) {
+    marker.style.display = "block";
+    marker.style.left = pct + "%";
+  }
+}
+
+window.adjustTarget = function(delta) {
+  diceTarget = Math.max(2, Math.min(99, diceTarget + delta));
+  updateDiceUI();
+};
+
+window.setDirection = function(dir) {
+  diceDirection = dir;
+  updateDiceUI();
+};
+
+window.rollDice = async function() {
+  if (diceRolling) return;
+  const bet = parseBet("dice-bet");
+  if (bet === null) return;
+
+  // Valider que le multiplicateur est raisonnable (anti-triche UI)
+  const mult = calcDiceMultiplier(diceTarget, diceDirection);
+  if (mult < 1.01 || mult > 9900) {
+    toast("Paramètres invalides", "lose");
+    return;
+  }
+
+  diceRolling = true;
+  const btn = document.getElementById("dice-roll-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Lancer..."; }
+
+  // ── Déduction IMMÉDIATE de la mise ──
+  userData.balance -= bet;
+  updateAllBalances();
+  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+
+  // Suspense visuel
+  const rolledEl = document.getElementById("dice-rolled");
+  if (rolledEl) { rolledEl.className = "dice-rolled"; rolledEl.textContent = "..."; }
+
+  await delay(150);
+
+  // Lancer honnête : résultat entre 1 et 100 inclus
+  const rolled = Math.floor(Math.random() * 100) + 1;
+
+  // Déterminer victoire
+  const won = diceDirection === "under" ? rolled < diceTarget : rolled > diceTarget;
+
+  // Animation du résultat
+  let count = 0;
+  const frames = 12;
+  await new Promise(resolve => {
+    const iv = setInterval(() => {
+      if (rolledEl) rolledEl.textContent = Math.floor(Math.random() * 100) + 1;
+      count++;
+      if (count >= frames) { clearInterval(iv); resolve(); }
+    }, 40);
+  });
+
+  if (rolledEl) {
+    rolledEl.textContent = rolled;
+    rolledEl.className = "dice-rolled " + (won ? "win" : "lose");
+  }
+
+  // Mise à jour solde
+  if (won) {
+    const payout = Math.floor(bet * mult);
+    userData.balance += payout;
+    toast(`🎲 ${rolled} — Gagné ! +${payout} VLX (×${mult.toFixed(2)})`, "win");
+  } else {
+    toast(`🎲 ${rolled} — Perdu ${bet} VLX`, "lose");
+  }
+
+  userData.gamesPlayed++;
+  await saveUserData();
+
+  diceRolling = false;
+  if (btn) { btn.disabled = false; btn.textContent = "🎲 LANCER"; }
+};
 // ══════════════════════════════════════════════════════════════
 const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 function rouletteColor(n) {
@@ -304,6 +500,12 @@ window.spinRoulette = async function() {
   if(rouletteSpinning) return;
   if(!rouletteSelectedColor){toast("Choisis une couleur d'abord !","lose");return;}
   const bet=parseBet("roulette-bet"); if(bet===null) return;
+
+  // ── Déduction IMMÉDIATE de la mise ──
+  userData.balance -= bet;
+  updateAllBalances();
+  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
+
   rouletteSpinning=true; ballVisible=false;
   document.getElementById("roulette-spin-btn").disabled=true;
   document.getElementById("roulette-result-box").style.visibility="hidden";
@@ -322,8 +524,12 @@ window.spinRoulette = async function() {
 };
 
 async function endSpinRoulette(result,resultColor,bet){
-  const won=resultColor===rouletteSelectedColor, mult=resultColor==="green"?20:2, gain=won?bet*mult-bet:-bet;
-  userData.balance=Math.max(0,userData.balance+gain); userData.gamesPlayed++; await saveUserData();
+  // Mise déjà déduite — on crédite seulement si victoire
+  const won=resultColor===rouletteSelectedColor;
+  const mult=resultColor==="green"?20:2;
+  if(won){ userData.balance += bet*mult; }
+  userData.gamesPlayed++;
+  await saveUserData();
   const box=document.getElementById("roulette-result-box"), numEl=document.getElementById("roulette-result-num"), lblEl=document.getElementById("roulette-result-label");
   box.style.visibility="visible"; numEl.textContent=result;
   numEl.style.color=resultColor==="green"?"#2ecc71":resultColor==="red"?"#e74c3c":"#aaa";
@@ -339,7 +545,21 @@ async function endSpinRoulette(result,resultColor,bet){
 const GRID_SIZE=25, MINE_COUNT=5;
 let minesActive=false, minesBet=0, minesGrid=[], safeRevealed=0;
 function getMinesMultiplier(safe){const t=[1,1.18,1.40,1.68,2.05,2.55,3.25,4.25,5.70,8.0,12,19,33,65,156,500,2000,10000,50000,250000];return t[Math.min(safe,t.length-1)];}
-window.startMines=function(){const bet=parseBet("mines-bet");if(!bet)return;minesBet=bet;safeRevealed=0;minesActive=true;userData.balance-=bet;updateAllBalances();const pos=Array.from({length:GRID_SIZE},(_,i)=>i);shuffle(pos);minesGrid=Array(GRID_SIZE).fill(false);for(let i=0;i<MINE_COUNT;i++)minesGrid[pos[i]]=true;renderMinesGrid();updateMinesInfo();document.getElementById("mines-start-btn").disabled=true;document.getElementById("mines-cashout-btn").disabled=true;document.getElementById("mines-bet").disabled=true;};
+window.startMines=async function(){
+  const bet=parseBet("mines-bet");if(!bet)return;
+  minesBet=bet;safeRevealed=0;minesActive=true;
+  // ── Déduction IMMÉDIATE et persistée ──
+  userData.balance-=bet;
+  updateAllBalances();
+  await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});
+  const pos=Array.from({length:GRID_SIZE},(_,i)=>i);shuffle(pos);
+  minesGrid=Array(GRID_SIZE).fill(false);
+  for(let i=0;i<MINE_COUNT;i++)minesGrid[pos[i]]=true;
+  renderMinesGrid();updateMinesInfo();
+  document.getElementById("mines-start-btn").disabled=true;
+  document.getElementById("mines-cashout-btn").disabled=true;
+  document.getElementById("mines-bet").disabled=true;
+};
 window.cashoutMines=async function(){if(!minesActive||safeRevealed<2)return;const mult=getMinesMultiplier(safeRevealed),win=Math.round(minesBet*mult);userData.balance+=win;userData.gamesPlayed++;minesActive=false;await saveUserData();toast(`Cashout ! +${win} VLX (×${mult.toFixed(2)}) 💰`,"win");revealAllMines();resetMinesButtons();};
 function revealCell(idx){if(!minesActive)return;const cells=document.querySelectorAll(".mine-cell"),cell=cells[idx];if(cell.classList.contains("revealed"))return;cell.classList.add("revealed");if(minesGrid[idx]){cell.classList.add("mine");cell.textContent="💣";minesActive=false;userData.gamesPlayed++;saveUserData();toast(`MINE ! Perdu ${minesBet} VLX 💥`,"lose");revealAllMines();resetMinesButtons();}else{cell.classList.add("safe");cell.textContent="✓";safeRevealed++;updateMinesInfo();if(safeRevealed>=2)document.getElementById("mines-cashout-btn").disabled=false;if(safeRevealed===GRID_SIZE-MINE_COUNT){const mult=getMinesMultiplier(safeRevealed),win=Math.round(minesBet*mult);userData.balance+=win;userData.gamesPlayed++;minesActive=false;saveUserData();toast(`Parfait ! +${win} VLX 🏆`,"win");resetMinesButtons();}}}
 function updateMinesInfo(){const mult=getMinesMultiplier(safeRevealed);document.getElementById("mines-safe-count").textContent=safeRevealed;document.getElementById("mines-multiplier").textContent="×"+mult.toFixed(2);document.getElementById("mines-bet-display").textContent=minesBet+" VLX";document.getElementById("mines-potential").textContent=Math.round(minesBet*mult)+" VLX";}
@@ -352,7 +572,36 @@ function resetMinesButtons(){document.getElementById("mines-start-btn").disabled
 // ══════════════════════════════════════════════════════════════
 let chosenSide=null, coinFlipping=false;
 window.chooseSide=function(side){if(coinFlipping)return;chosenSide=side;document.getElementById("choose-blue").classList.toggle("selected",side==="blue");document.getElementById("choose-red").classList.toggle("selected",side==="red");document.getElementById("coinflip-btn").disabled=false;};
-window.flipCoin=async function(){if(!chosenSide||coinFlipping)return;const bet=parseBet("coinflip-bet");if(!bet)return;coinFlipping=true;document.getElementById("coinflip-btn").disabled=true;document.getElementById("coinflip-result").textContent="";const result=Math.random()<.5?"blue":"red";const coin=document.getElementById("coin");coin.className="coin flip-"+result;await delay(1400);const won=result===chosenSide;userData.balance=Math.max(0,userData.balance+(won?bet:-bet));userData.gamesPlayed++;await saveUserData();document.getElementById("coinflip-result").innerHTML=won?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`:`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");await delay(900);coin.className="coin";coinFlipping=false;chosenSide=null;document.getElementById("choose-blue").classList.remove("selected");document.getElementById("choose-red").classList.remove("selected");document.getElementById("coinflip-btn").disabled=true;};
+window.flipCoin=async function(){
+  if(!chosenSide||coinFlipping)return;
+  const bet=parseBet("coinflip-bet");if(!bet)return;
+  coinFlipping=true;
+  document.getElementById("coinflip-btn").disabled=true;
+  document.getElementById("coinflip-result").textContent="";
+
+  // ── Déduction IMMÉDIATE ──
+  userData.balance -= bet;
+  updateAllBalances();
+  await updateDoc(doc(db,"users",currentUser.uid),{balance:userData.balance});
+
+  const result=Math.random()<.5?"blue":"red";
+  const coin=document.getElementById("coin");
+  coin.className="coin flip-"+result;
+  await delay(1400);
+  const won=result===chosenSide;
+  if(won){ userData.balance += bet*2; } // rembourse mise + gain
+  userData.gamesPlayed++;
+  await saveUserData();
+  document.getElementById("coinflip-result").innerHTML=won
+    ?`<span style="color:var(--green2)">Gagné ! +${bet} VLX 🎉</span>`
+    :`<span style="color:var(--red2)">Perdu ${bet} VLX</span>`;
+  toast(won?`Correct ! +${bet} VLX`:`Perdu ${bet} VLX`,won?"win":"lose");
+  await delay(900);
+  coin.className="coin";coinFlipping=false;chosenSide=null;
+  document.getElementById("choose-blue").classList.remove("selected");
+  document.getElementById("choose-red").classList.remove("selected");
+  document.getElementById("coinflip-btn").disabled=true;
+};
 
 // ══════════════════════════════════════════════════════════════
 //  MACHINE À SOUS
