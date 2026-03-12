@@ -57,7 +57,6 @@ window.goToPage = function(name) { showPage(name); };
 
 window.goToGame = function(game) {
   if (game === "leaderboard") renderLeaderboard();
-  if (game === "dice") updateDiceUI();
   if (game === "tombola") initTombola();
   if (game === "joueurs") initJoueurs();
   if (game === "bourse") { initBourse(); return; }
@@ -84,7 +83,7 @@ window.goToLobby = function() {
 function updateAllBalances() {
   if (!userData) return;
   const bal = (userData.balance || 0).toLocaleString("fr-FR") + " VLX";
-  ["dice","mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","poker","bourse"].forEach(id => {
+  ["mines","coinflip","tombola","bj1v1","roulette","slots","blackjack","poker","bourse"].forEach(id => {
     const el = document.getElementById(id + "-balance");
     if (el) el.textContent = bal;
   });
@@ -109,11 +108,24 @@ document.getElementById("logout-btn").onclick = async () => {
 
 onAuthStateChanged(auth, async user => {
   if (user) {
+    // Si l'écran ban est déjà affiché (reconnexion rapide), on reban direct
+    if (bannedScreenShown) { await signOut(auth); return; }
+
     currentUser = user;
+    const banned = await checkIfBanned(user.uid);
+    if (banned) {
+      currentUser = null;
+      showBannedScreen();
+      // Déconnexion silencieuse sans déclencher showPage("login")
+      bannedScreenShown = true;
+      await signOut(auth);
+      return;
+    }
+
     await loadOrCreateUser(user);
     if (!userData) return;
 
-    // ── Enregistre la session active sur ce compte ──
+    // Enregistre la session active
     await updateDoc(doc(db, "users", user.uid), {
       online: true,
       lastSeen: Date.now(),
@@ -127,21 +139,17 @@ onAuthStateChanged(auth, async user => {
     showPage("lobby");
     initBonus();
 
-    // Heartbeat toutes les 20s pour maintenir la session active
+    // Heartbeat toutes les 20s
     setInterval(() => {
-      if (currentUser && !sessionKilled) {
+      if (currentUser && !sessionKilled && !bannedScreenShown) {
         updateDoc(doc(db, "users", currentUser.uid), {
-          online: true,
-          lastSeen: Date.now(),
-          activeSession: SESSION_ID
+          online: true, lastSeen: Date.now(), activeSession: SESSION_ID
         });
       }
     }, 20000);
 
-    // Déconnexion propre si l'onglet/fenêtre est fermé
     window.addEventListener("beforeunload", () => {
       if (currentUser && !sessionKilled) {
-        navigator.sendBeacon && navigator.sendBeacon("/favicon.ico"); // just to flush
         updateDoc(doc(db, "users", currentUser.uid), { online: false, activeSession: null });
       }
     });
@@ -150,12 +158,20 @@ onAuthStateChanged(auth, async user => {
     currentUser = null; userData = null;
     if (unsubLB) { unsubLB(); unsubLB = null; }
     if (unsubMe) { unsubMe(); unsubMe = null; }
-    // Ne pas afficher login si l'écran ban ou session dupliquée est actif
+    // Ne montre la page login QUE si aucun écran bloquant n'est actif
     if (!bannedScreenShown && !sessionKilled) {
       showPage("login");
     }
   }
 });
+
+// Vérifie le ban AVANT tout chargement de l'app
+async function checkIfBanned(uid) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    return snap.exists() && snap.data().banned === true;
+  } catch { return false; }
+}
 
 async function loadOrCreateUser(user) {
   const ref = doc(db, "users", user.uid);
@@ -166,15 +182,10 @@ async function loadOrCreateUser(user) {
       avatar: user.photoURL || "", balance: 1500, gamesPlayed: 0,
       lastBonus: 0, createdAt: Date.now(), online: true, lastSeen: Date.now()
     };
-    await setDoc(ref, u); userData = u;
+    await setDoc(ref, u);
+    userData = u;
   } else {
     userData = snap.data();
-    if (userData.banned) {
-      userData = null;
-      showBannedScreen(); // affiche l'écran AVANT le signOut
-      await signOut(auth); // signOut déclenche onAuthStateChanged → user=null
-      // mais le flag bannedScreenShown empêche showPage("login")
-    }
   }
 }
 
@@ -268,27 +279,31 @@ async function saveUserData() {
 // ══════════════════════════════════════════════════════════════
 function listenMyDoc() {
   if (unsubMe) unsubMe();
-  unsubMe = onSnapshot(doc(db, "users", currentUser.uid), snap => {
+  unsubMe = onSnapshot(doc(db, "users", currentUser.uid), async snap => {
     if (!snap.exists()) return;
     const data = snap.data();
 
-    // ── Vérification ban en temps réel ──
-    if (data.banned) {
+    // ── Ban détecté en temps réel — freeze immédiat ──
+    if (data.banned && !bannedScreenShown) {
+      bannedScreenShown = true;
       if (unsubMe) { unsubMe(); unsubMe = null; }
       if (unsubLB) { unsubLB(); unsubLB = null; }
-      bannedScreenShown = true;
+      currentUser = null;
+      userData = null;
       showBannedScreen();
-      signOut(auth);
+      await signOut(auth);
       return;
     }
 
-    // ── Détection session dupliquée (autre onglet / autre appareil) ──
+    if (bannedScreenShown) return;
+
+    // ── Session dupliquée ──
     if (data.activeSession && data.activeSession !== SESSION_ID && !sessionKilled) {
       sessionKilled = true;
       if (unsubMe) { unsubMe(); unsubMe = null; }
       if (unsubLB) { unsubLB(); unsubLB = null; }
       showDuplicateSessionScreen();
-      signOut(auth);
+      await signOut(auth);
       return;
     }
 
@@ -309,8 +324,7 @@ function listenMyDoc() {
       updateDoc(doc(db, "users", currentUser.uid), { gameStarted: null }).then(() => {
         getDoc(doc(db, "bj1v1", gid)).then(gs => {
           if (!gs.exists()) { bj1v1Starting = false; return; }
-          const g = gs.data();
-          startBj1v1(gid, g.players[0], g.players[1], g.bet);
+          startBj1v1(gid, gs.data().players[0], gs.data().players[1], gs.data().bet);
         }).catch(() => { bj1v1Starting = false; });
       });
     }
@@ -332,127 +346,7 @@ function parseBet(id) {
   return Math.floor(v);
 }
 
-// ══════════════════════════════════════════════════════════════
-//  DICE — Probabilités honnêtes, mise déduite avant le lancer
-// ══════════════════════════════════════════════════════════════
-let diceTarget = 50;
-let diceDirection = "under"; // "under" ou "over"
-let diceRolling = false;
 
-// Calcul du multiplicateur selon la probabilité réelle
-// win% = (target-1)/100 pour "under", (100-target)/100 pour "over"
-// mult = (100 / win%) × 0.96  (house edge 4%)
-function calcDiceMultiplier(target, direction) {
-  let winChance;
-  if (direction === "under") {
-    winChance = (target - 1); // P(résultat < target) = (target-1)/100
-  } else {
-    winChance = (100 - target); // P(résultat > target) = (100-target)/100
-  }
-  winChance = Math.max(1, Math.min(98, winChance)); // clamping sécurité
-  const mult = (100 / winChance) * 0.96;
-  return Math.round(mult * 100) / 100;
-}
-
-function updateDiceUI() {
-  const pct = diceDirection === "under" ? (diceTarget - 1) : (100 - diceTarget);
-  const mult = calcDiceMultiplier(diceTarget, diceDirection);
-
-  const barWin = document.getElementById("dice-bar-win");
-  if (barWin) barWin.style.width = pct + "%";
-
-  const targetEl = document.getElementById("dice-target-display");
-  if (targetEl) targetEl.textContent = diceTarget;
-
-  const multEl = document.getElementById("dice-mult-display");
-  if (multEl) multEl.textContent = "×" + mult.toFixed(2);
-
-  const dirUnder = document.getElementById("dir-under");
-  const dirOver = document.getElementById("dir-over");
-  if (dirUnder) dirUnder.classList.toggle("active", diceDirection === "under");
-  if (dirOver) dirOver.classList.toggle("active", diceDirection === "over");
-
-  const marker = document.getElementById("dice-bar-marker");
-  if (marker) {
-    marker.style.display = "block";
-    marker.style.left = pct + "%";
-  }
-}
-
-window.adjustTarget = function(delta) {
-  diceTarget = Math.max(2, Math.min(99, diceTarget + delta));
-  updateDiceUI();
-};
-
-window.setDirection = function(dir) {
-  diceDirection = dir;
-  updateDiceUI();
-};
-
-window.rollDice = async function() {
-  if (diceRolling) return;
-  const bet = parseBet("dice-bet");
-  if (bet === null) return;
-
-  // Valider que le multiplicateur est raisonnable (anti-triche UI)
-  const mult = calcDiceMultiplier(diceTarget, diceDirection);
-  if (mult < 1.01 || mult > 9900) {
-    toast("Paramètres invalides", "lose");
-    return;
-  }
-
-  diceRolling = true;
-  const btn = document.getElementById("dice-roll-btn");
-  if (btn) { btn.disabled = true; btn.textContent = "⏳ Lancer..."; }
-
-  // ── Déduction IMMÉDIATE de la mise ──
-  userData.balance -= bet;
-  updateAllBalances();
-  await updateDoc(doc(db, "users", currentUser.uid), { balance: userData.balance });
-
-  // Suspense visuel
-  const rolledEl = document.getElementById("dice-rolled");
-  if (rolledEl) { rolledEl.className = "dice-rolled"; rolledEl.textContent = "..."; }
-
-  await delay(150);
-
-  // Lancer honnête : résultat entre 1 et 100 inclus
-  const rolled = Math.floor(Math.random() * 100) + 1;
-
-  // Déterminer victoire
-  const won = diceDirection === "under" ? rolled < diceTarget : rolled > diceTarget;
-
-  // Animation du résultat
-  let count = 0;
-  const frames = 12;
-  await new Promise(resolve => {
-    const iv = setInterval(() => {
-      if (rolledEl) rolledEl.textContent = Math.floor(Math.random() * 100) + 1;
-      count++;
-      if (count >= frames) { clearInterval(iv); resolve(); }
-    }, 40);
-  });
-
-  if (rolledEl) {
-    rolledEl.textContent = rolled;
-    rolledEl.className = "dice-rolled " + (won ? "win" : "lose");
-  }
-
-  // Mise à jour solde
-  if (won) {
-    const payout = Math.floor(bet * mult);
-    userData.balance += payout;
-    toast(`🎲 ${rolled} — Gagné ! +${payout} VLX (×${mult.toFixed(2)})`, "win");
-  } else {
-    toast(`🎲 ${rolled} — Perdu ${bet} VLX`, "lose");
-  }
-
-  userData.gamesPlayed++;
-  await saveUserData();
-
-  diceRolling = false;
-  if (btn) { btn.disabled = false; btn.textContent = "🎲 LANCER"; }
-};
 // ══════════════════════════════════════════════════════════════
 const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 function rouletteColor(n) {
@@ -840,9 +734,10 @@ async function bjFinish(outcome) {
 // ══════════════════════════════════════════════════════════════
 let leaderboardData = [];
 function startLeaderboard() {
-  const q = query(collection(db,"users"), orderBy("balance","desc"), limit(20));
+  const q = query(collection(db,"users"), orderBy("balance","desc"), limit(50));
   unsubLB = onSnapshot(q, snap => {
-    leaderboardData = snap.docs.map(d => d.data());
+    // Exclure les bannis du classement
+    leaderboardData = snap.docs.map(d => d.data()).filter(u => !u.banned);
     if (currentPage === "leaderboard") renderLeaderboard();
   });
 }
