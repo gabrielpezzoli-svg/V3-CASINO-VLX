@@ -1538,7 +1538,7 @@ const BOURSE_ASSETS = [
 ];
 
 const BOURSE_HISTORY_LEN = 40;
-const BOURSE_UPDATE_MS   = 3000; // tick toutes les 10s
+const BOURSE_UPDATE_MS   = 5000; // tick toutes les 10s
 
 // bourseMarketData survit aux changements de page (lobby → bourse → lobby → bourse)
 let bourseMarketData     = null;
