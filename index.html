@@ -564,6 +564,7 @@
     </div>
     <div id="admin-panel-step" style="display:none;display:flex;flex-direction:column;gap:.8rem">
       <div style="color:var(--green2);font-size:.85rem">✅ Accès accordé</div>
+      <div id="admin-uid-info" style="display:none;font-family:var(--ff-mono);font-size:.72rem;color:var(--text2);background:var(--bg3);padding:.4rem .7rem;border-radius:4px;word-break:break-all;cursor:pointer;" onclick="navigator.clipboard?.writeText(this.dataset.uid)" title="Cliquer pour copier ton UID"></div>
       <label class="bet-label">Rechercher un joueur</label>
       <input type="text" id="admin-search-input" class="bet-input" placeholder="Nom du joueur..." style="width:100%" oninput="adminSearchPlayers()"/>
       <div id="admin-search-results" style="display:flex;flex-direction:column;gap:.4rem;max-height:200px;overflow-y:auto"></div>
