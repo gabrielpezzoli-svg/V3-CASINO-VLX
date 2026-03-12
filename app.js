@@ -281,39 +281,6 @@ async function endSpinRoulette(result,resultColor,bet){
 }
 
 // ══════════════════════════════════════════════════════════════
-//  DICE
-// ══════════════════════════════════════════════════════════════
-let diceTarget=50, diceDirection="under", diceRolling=false;
-function diceWinChance(){return diceDirection==="under"?(diceTarget-1)/100:(100-diceTarget)/100;}
-function diceMultiplier(){const c=diceWinChance();return c<=0?0:Math.round((0.98/c)*100)/100;}
-function updateDiceUI(){
-  document.getElementById("dice-target-display").textContent=diceTarget;
-  document.getElementById("dice-mult-display").textContent="×"+diceMultiplier().toFixed(2);
-  const bar=document.getElementById("dice-bar-win");
-  if(diceDirection==="under"){bar.style.left="0%";bar.style.width=(diceTarget-1)+"%";bar.style.borderRadius="22px 0 0 22px";}
-  else{bar.style.left=diceTarget+"%";bar.style.width=(100-diceTarget)+"%";bar.style.borderRadius="0 22px 22px 0";}
-}
-window.adjustTarget=d=>{diceTarget=Math.max(2,Math.min(98,diceTarget+d));updateDiceUI();};
-window.setDirection=dir=>{diceDirection=dir;document.getElementById("dir-under").classList.toggle("active",dir==="under");document.getElementById("dir-over").classList.toggle("active",dir==="over");updateDiceUI();};
-window.rollDice=async function(){
-  if(diceRolling)return;const bet=parseBet("dice-bet");if(!bet)return;
-  if(diceWinChance()<=0){toast("Zone impossible !","lose");return;}
-  diceRolling=true;document.getElementById("dice-roll-btn").disabled=true;
-  const result=Math.floor(Math.random()*100)+1;
-  const marker=document.getElementById("dice-bar-marker");
-  marker.style.display="block";marker.style.transition="none";marker.style.left="0%";
-  await delay(50);marker.style.transition="left 0.9s cubic-bezier(.25,.8,.25,1)";marker.style.left=result+"%";
-  await delay(1000);
-  const won=diceDirection==="under"?result<diceTarget:result>diceTarget, mult=diceMultiplier();
-  userData.balance=Math.max(0,userData.balance+(won?Math.round(bet*mult)-bet:-bet));userData.gamesPlayed++;await saveUserData();
-  const rolledEl=document.getElementById("dice-rolled");rolledEl.textContent=result;rolledEl.className="dice-rolled "+(won?"win":"lose");
-  const barWin=document.getElementById("dice-bar-win");barWin.style.background=won?"linear-gradient(90deg,var(--green),#2ecc71)":"linear-gradient(90deg,var(--red),var(--red2))";
-  setTimeout(()=>{barWin.style.background="linear-gradient(90deg,var(--green),#2ecc71)";},1500);
-  toast(won?`Gagné ! +${Math.round(bet*mult)} VLX (×${mult.toFixed(2)}) 🎉`:`Perdu ${bet} VLX — résultat : ${result}`,won?"win":"lose");
-  await delay(400);diceRolling=false;document.getElementById("dice-roll-btn").disabled=false;
-};
-
-// ══════════════════════════════════════════════════════════════
 //  MINES
 // ══════════════════════════════════════════════════════════════
 const GRID_SIZE=25, MINE_COUNT=5;
