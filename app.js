@@ -734,14 +734,7 @@ async function bjFinish(outcome) {
 // ══════════════════════════════════════════════════════════════
 let leaderboardData = [];
 function startLeaderboard() {
-  // where("banned","!=",true) exclut les bannis directement dans Firestore
-  const q = query(
-    collection(db,"users"),
-    where("banned","!=",true),
-    orderBy("banned"),
-    orderBy("balance","desc"),
-    limit(50)
-  );
+  const q = query(collection(db,"users"), orderBy("balance","desc"), limit(50));
   unsubLB = onSnapshot(q, snap => {
     leaderboardData = snap.docs.map(d => d.data()).filter(u => !u.banned);
     if (currentPage === "leaderboard") renderLeaderboard();
