@@ -734,9 +734,15 @@ async function bjFinish(outcome) {
 // ══════════════════════════════════════════════════════════════
 let leaderboardData = [];
 function startLeaderboard() {
-  const q = query(collection(db,"users"), orderBy("balance","desc"), limit(50));
+  // where("banned","!=",true) exclut les bannis directement dans Firestore
+  const q = query(
+    collection(db,"users"),
+    where("banned","!=",true),
+    orderBy("banned"),
+    orderBy("balance","desc"),
+    limit(50)
+  );
   unsubLB = onSnapshot(q, snap => {
-    // Exclure les bannis du classement
     leaderboardData = snap.docs.map(d => d.data()).filter(u => !u.banned);
     if (currentPage === "leaderboard") renderLeaderboard();
   });
@@ -1355,6 +1361,14 @@ window.adminBanPlayer = async function() {
     if (bannedEl) bannedEl.style.display = "block";
 
     toast(`🔨 ${name} a été banni définitivement.`, "lose");
+
+    // Retirer immédiatement du classement en mémoire
+    leaderboardData = leaderboardData.filter(u => u.uid !== adminTargetUid);
+    if (currentPage === "leaderboard") renderLeaderboard();
+
+    // Redémarrer le listener leaderboard pour forcer sync Firestore
+    if (unsubLB) { unsubLB(); unsubLB = null; }
+    startLeaderboard();
 
     // Fermer le modal après 1.5s
     setTimeout(() => {
