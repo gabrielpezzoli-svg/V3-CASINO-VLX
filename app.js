@@ -137,8 +137,50 @@ async function loadOrCreateUser(user) {
     await setDoc(ref, u); userData = u;
   } else {
     userData = snap.data();
-    if (userData.banned) { toast("Votre compte a été banni.", "lose"); userData = null; await signOut(auth); }
+    if (userData.banned) {
+      // Afficher la page de ban définitif
+      showBannedScreen();
+      userData = null;
+      await signOut(auth);
+    }
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ÉCRAN DE BAN DÉFINITIF
+// ══════════════════════════════════════════════════════════════
+function showBannedScreen() {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.body.style.margin = "0";
+  document.body.style.padding = "0";
+  document.body.style.background = "#000";
+  document.body.style.overflow = "hidden";
+
+  const existing = document.getElementById("banned-screen");
+  if (existing) { existing.style.display = "flex"; return; }
+
+  const screen = document.createElement("div");
+  screen.id = "banned-screen";
+  screen.style.cssText = `
+    position:fixed;inset:0;background:#000;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    z-index:99999;gap:1.5rem;
+    font-family:'DM Mono',monospace;
+  `;
+  screen.innerHTML = `
+    <div style="font-size:5rem;animation:banPulse 2s ease-in-out infinite;">🔨</div>
+    <div style="color:#e74c3c;font-size:2.2rem;font-weight:700;letter-spacing:.1em;text-align:center;">COMPTE BANNI</div>
+    <div style="color:#555;font-size:1rem;text-align:center;max-width:340px;line-height:1.7;">
+      Votre compte a été banni définitivement.<br>
+      Vous ne pouvez plus accéder au Casino VLX.
+    </div>
+    <div style="color:#333;font-size:.75rem;letter-spacing:.2em;margin-top:1rem;">— CASINO VLX —</div>
+    <style>
+      @keyframes banPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0px #e74c3c)}50%{transform:scale(1.1);filter:drop-shadow(0 0 20px #e74c3c)}}
+    </style>
+  `;
+  document.body.appendChild(screen);
 }
 
 async function saveUserData() {
@@ -154,7 +196,18 @@ function listenMyDoc() {
   if (unsubMe) unsubMe();
   unsubMe = onSnapshot(doc(db, "users", currentUser.uid), snap => {
     if (!snap.exists()) return;
-    userData = snap.data();
+    const data = snap.data();
+
+    // Vérification ban en temps réel
+    if (data.banned) {
+      if (unsubMe) { unsubMe(); unsubMe = null; }
+      if (unsubLB) { unsubLB(); unsubLB = null; }
+      showBannedScreen();
+      signOut(auth);
+      return;
+    }
+
+    userData = data;
     updateAllBalances();
 
     const inv = userData.pendingGameInvite;
@@ -1055,7 +1108,8 @@ window.adminSearchPlayers = async function() {
     results.slice(0, 10).forEach(u => {
       const el = document.createElement("div");
       el.className = "admin-player-result";
-      el.innerHTML = `<img src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span>${u.name||"Joueur"}</span><span style="font-family:var(--ff-mono);color:var(--gold2);font-size:.8rem;margin-left:auto">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>`;
+      const bannedBadge = u.banned ? `<span style="color:#e74c3c;font-size:.7rem;font-weight:700;margin-left:auto;background:rgba(231,76,60,.15);padding:.1rem .4rem;border-radius:3px;">🔨 BANNI</span>` : `<span style="font-family:var(--ff-mono);color:var(--gold2);font-size:.8rem;margin-left:auto">${(u.balance||0).toLocaleString("fr-FR")} VLX</span>`;
+      el.innerHTML = `<img src="${u.avatar||''}" onerror="this.style.display='none'" alt=""><span>${u.name||"Joueur"}</span>${bannedBadge}`;
       el.onclick = () => adminSelectPlayer(u);
       resultsEl.appendChild(el);
     });
@@ -1067,6 +1121,11 @@ function adminSelectPlayer(u) {
   adminTargetData = u;
   document.getElementById("admin-target-name").textContent = u.name || "Joueur";
   document.getElementById("admin-target-balance").textContent = (u.balance||0).toLocaleString("fr-FR") + " VLX";
+
+  // Afficher le badge banni si applicable
+  const bannedEl = document.getElementById("admin-target-banned");
+  if (bannedEl) bannedEl.style.display = u.banned ? "block" : "none";
+
   document.getElementById("admin-selected-player").style.display = "";
   document.getElementById("admin-give-amount").value = 1000;
   document.getElementById("admin-search-results").innerHTML = "";
@@ -1113,6 +1172,62 @@ window.adminSetVLX = async function() {
     document.getElementById("admin-target-balance").textContent = amount.toLocaleString("fr-FR") + " VLX";
     if (adminTargetData) adminTargetData.balance = amount;
   } catch(e) { toast("Erreur lors de la modification : " + e.message, "lose"); }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  ADMIN — BAN DÉFINITIF
+// ══════════════════════════════════════════════════════════════
+window.adminBanPlayer = async function() {
+  if (!adminAuthenticated || !adminTargetUid) return;
+  const name = adminTargetData?.name || adminTargetUid;
+
+  // Double confirmation pour éviter les accidents
+  const confirmed1 = confirm(`⚠️ BANNIR "${name}" ?\n\nCette action est DÉFINITIVE et IRRÉVERSIBLE.\nLe joueur sera bloqué pour toujours.`);
+  if (!confirmed1) return;
+  const confirmed2 = confirm(`🔨 CONFIRMATION FINALE\n\nVous êtes sur le point de bannir "${name}" DÉFINITIVEMENT.\n\nCliquez OK pour confirmer.`);
+  if (!confirmed2) return;
+
+  try {
+    await updateDoc(doc(db, "users", adminTargetUid), {
+      banned: true,
+      bannedAt: Date.now(),
+      bannedBy: currentUser?.uid || "admin",
+      online: false
+    });
+
+    // Mettre à jour l'affichage
+    const bannedEl = document.getElementById("admin-target-banned");
+    if (bannedEl) bannedEl.style.display = "block";
+
+    toast(`🔨 ${name} a été banni définitivement.`, "lose");
+
+    // Fermer le modal après 1.5s
+    setTimeout(() => {
+      document.getElementById("admin-modal").style.display = "none";
+    }, 1500);
+
+  } catch(e) {
+    toast("Erreur lors du ban : " + e.message, "lose");
+  }
+};
+
+window.adminUnbanPlayer = async function() {
+  if (!adminAuthenticated || !adminTargetUid) return;
+  const name = adminTargetData?.name || adminTargetUid;
+  const confirmed = confirm(`Débannir "${name}" ?`);
+  if (!confirmed) return;
+  try {
+    await updateDoc(doc(db, "users", adminTargetUid), {
+      banned: false,
+      bannedAt: null,
+      bannedBy: null
+    });
+    const bannedEl = document.getElementById("admin-target-banned");
+    if (bannedEl) bannedEl.style.display = "none";
+    toast(`✅ ${name} a été débanni.`, "win");
+  } catch(e) {
+    toast("Erreur lors du déban : " + e.message, "lose");
+  }
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -1505,23 +1620,20 @@ const BOURSE_ASSETS = [
 ];
 
 const BOURSE_HISTORY_LEN = 40;
-const BOURSE_UPDATE_MS   = 5000; // tick toutes les 10s
+const BOURSE_UPDATE_MS   = 5000;
 
-// bourseMarketData survit aux changements de page (lobby → bourse → lobby → bourse)
 let bourseMarketData     = null;
 let bourseInvestments    = [];
 let bourseSelectedId     = BOURSE_ASSETS[0].id;
 let bourseTickTimer      = null;
 let bourseCountdownTimer = null;
 
-// ── Arrêt propre (timers seulement, le marché reste en mémoire) ──
 window.stopBourse = function() {
   clearInterval(bourseTickTimer);
   clearInterval(bourseCountdownTimer);
   bourseTickTimer = bourseCountdownTimer = null;
 };
 
-// ── Création marché initial en mémoire ───────────────────────
 function createBourseMarketLocal() {
   const assets = {};
   BOURSE_ASSETS.forEach(a => {
@@ -1537,7 +1649,6 @@ function createBourseMarketLocal() {
   bourseMarketData = { assets, lastUpdate: Date.now() };
 }
 
-// ── Tick prix local ───────────────────────────────────────────
 function tickBoursePricesLocal() {
   if (!bourseMarketData) return;
   const assets = {};
@@ -1556,27 +1667,19 @@ function tickBoursePricesLocal() {
   bourseMarketData = { assets, lastUpdate: Date.now() };
 }
 
-// ── Entrée dans la page ───────────────────────────────────────
 async function initBourse() {
   stopBourse();
   showPage("bourse");
-  // Pas de reset de bourseSelectedId ni du marché : on conserve l'état entre les pages
 
-  // Recharger les investissements depuis Firestore (survit à la fermeture de l'onglet)
   await loadBourseInvestments();
 
-  // Créer le marché seulement si c'est la toute première fois
   if (!bourseMarketData) {
     createBourseMarketLocal();
   }
 
-  // Ajuster les prix du marché pour coller aux prix d'achat des investissements actifs
-  // (évite l'affichage de gains/pertes faux après un rechargement)
   reconcileBourseMarketWithInvestments();
-
   renderBourse();
 
-  // Tick automatique : vérifie chaque seconde, déclenche si 10s écoulées
   bourseTickTimer = setInterval(() => {
     if (!bourseMarketData) return;
     const age = Date.now() - (bourseMarketData.lastUpdate || 0);
@@ -1586,7 +1689,6 @@ async function initBourse() {
     }
   }, 1000);
 
-  // Compte à rebours affiché
   bourseCountdownTimer = setInterval(() => {
     const el = document.getElementById("bourse-next-tick");
     if (!el || !bourseMarketData) return;
@@ -1596,7 +1698,6 @@ async function initBourse() {
   }, 1000);
 }
 
-// ── Charger / sauvegarder les investissements (Firestore) ─────
 async function loadBourseInvestments() {
   if (!currentUser) return;
   try {
@@ -1614,21 +1715,13 @@ async function saveBourseInvestments() {
   }
 }
 
-// ── Reconstruire le marché en tenant compte des prix d'achat ──
-// Quand on recharge la page, les prix repartent de basePrice.
-// On force chaque actif dans lequel l'utilisateur a investi
-// à avoir un prix de départ = son purchasePrice, pour que
-// le portefeuille affiche 0% de gain/perte au lieu de chiffres faux.
 function reconcileBourseMarketWithInvestments() {
   if (!bourseMarketData || !bourseInvestments.length) return;
   bourseInvestments.forEach(inv => {
     if (bourseMarketData.assets[inv.assetId]) {
-      // On ne touche pas à l'historique, juste au prix courant
-      // si l'écart est trop grand (signe que le marché a été recréé)
       const asset = BOURSE_ASSETS.find(a => a.id === inv.assetId);
       if (!asset) return;
       const cur = bourseMarketData.assets[inv.assetId].price;
-      // Si le prix courant = basePrice (marché tout frais), on part du purchasePrice
       if (Math.abs(cur - asset.basePrice) / asset.basePrice < 0.3) {
         bourseMarketData.assets[inv.assetId].price = inv.purchasePrice;
         const hist = bourseMarketData.assets[inv.assetId].history;
@@ -1638,14 +1731,12 @@ function reconcileBourseMarketWithInvestments() {
   });
 }
 
-// ── Rendu global ──────────────────────────────────────────────
 function renderBourse() {
   renderBourseList();
   renderBourseDetail();
   renderBoursePortfolio();
 }
 
-// ── Colonne gauche : liste des 6 actifs ───────────────────────
 function renderBourseList() {
   const container = document.getElementById("bourse-assets-list");
   if (!container || !bourseMarketData) return;
@@ -1681,7 +1772,6 @@ function renderBourseList() {
   });
 }
 
-// ── Colonne droite : détail + achat ──────────────────────────
 function renderBourseDetail() {
   const panel = document.getElementById("bourse-detail-panel");
   if (!panel || !bourseMarketData) return;
@@ -1727,7 +1817,6 @@ function renderBourseDetail() {
     </div>`;
 }
 
-// ── Portefeuille personnel ────────────────────────────────────
 function renderBoursePortfolio() {
   const container = document.getElementById("bourse-portfolio");
   if (!container) return;
@@ -1778,7 +1867,6 @@ function renderBoursePortfolio() {
   });
 }
 
-// ── Investir ─────────────────────────────────────────────────
 window.bourseInvest = async function() {
   if (!bourseSelectedId || !bourseMarketData) return;
   const amount = parseBet("bourse-invest-amount");
@@ -1795,7 +1883,6 @@ window.bourseInvest = async function() {
     timestamp: Date.now()
   };
 
-  // Déduire immédiatement
   userData.balance -= amount;
   bourseInvestments.push(investment);
 
@@ -1804,11 +1891,9 @@ window.bourseInvest = async function() {
     const asset = BOURSE_ASSETS.find(a => a.id === bourseSelectedId);
     toast(`📈 ${amount} VLX investis dans ${asset.name} !`, "win");
     renderBoursePortfolio();
-    // Mettre à jour l'affichage du solde dans le header
     const bi = document.getElementById("bourse-invest-amount");
     if (bi) bi.max = userData.balance;
   } catch(e) {
-    // Rollback
     userData.balance += amount;
     bourseInvestments.pop();
     updateAllBalances();
@@ -1816,7 +1901,6 @@ window.bourseInvest = async function() {
   }
 };
 
-// ── Vendre ───────────────────────────────────────────────────
 window.bourseSell = async function(invId) {
   const idx = bourseInvestments.findIndex(i => i.id === invId);
   if (idx === -1) return;
@@ -1828,7 +1912,6 @@ window.bourseSell = async function(invId) {
   const currentValue = Math.round(inv.amount * (data.price / inv.purchasePrice));
   const profit       = currentValue - inv.amount;
 
-  // Retirer de la liste et créditer
   bourseInvestments.splice(idx, 1);
   userData.balance += currentValue;
   userData.gamesPlayed++;
@@ -1843,7 +1926,6 @@ window.bourseSell = async function(invId) {
     }
     renderBoursePortfolio();
   } catch(e) {
-    // Rollback
     bourseInvestments.splice(idx, 0, inv);
     userData.balance -= currentValue;
     userData.gamesPlayed--;
@@ -1852,7 +1934,6 @@ window.bourseSell = async function(invId) {
   }
 };
 
-// ── Graphique miniature ───────────────────────────────────────
 function bourseDrawMini(history, isUp) {
   if (!history || history.length < 2) return "";
   const W = 220, H = 40;
@@ -1870,7 +1951,6 @@ function bourseDrawMini(history, isUp) {
   </svg>`;
 }
 
-// ── Grand graphique avec remplissage ─────────────────────────
 function bourseDrawBig(history, isUp, color) {
   if (!history || history.length < 2) return "";
   const W = 500, H = 120;
@@ -1890,9 +1970,6 @@ function bourseDrawBig(history, isUp, color) {
   const fillPath = `M ${firstPt[0]},${H} L ${firstPt[0]},${firstPt[1]} ${ptsStr} L ${lastPt[0]},${H} Z`;
 
   const lineCol = isUp ? "#27ae60" : "#e74c3c";
-  const fillCol = isUp ? "rgba(39,174,96,.15)" : "rgba(231,76,60,.15)";
-
-  // Ligne de prix actuel
   const lastY = lastPt[1];
 
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;display:block;">
